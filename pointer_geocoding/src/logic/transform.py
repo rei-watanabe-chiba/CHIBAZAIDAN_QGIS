@@ -8,6 +8,9 @@ import csv
 import math
 from typing import Optional, Tuple, Dict, Any, List, Callable
 
+import numpy as np
+from scipy.optimize import least_squares
+
 from qgis.core import (
     QgsVectorLayer,
     QgsFeature,
@@ -30,7 +33,7 @@ from ..ui.style import UIStyleHelper
 
 
 class CoordinateTransformer:
-    """Performs 2-point Helmert or 3-point Affine transformation in standard mathematical coordinates
+    """Performs 2-point Helmert or N-point non-shear Affine transformation in standard mathematical coordinates
     (math_x=East, math_y=North), computes residuals in survey coordinates,
     and updates digitized point features.
     """
@@ -106,70 +109,6 @@ class CoordinateTransformer:
         return {"a": a, "b": b, "Tx": Tx, "Ty": Ty}
 
     @staticmethod
-    def compute_affine_3p(
-        p1: Tuple[float, float],
-        p2: Tuple[float, float],
-        p3: Tuple[float, float],
-        P1: Tuple[float, float],
-        P2: Tuple[float, float],
-        P3: Tuple[float, float],
-        parent: Optional[QWidget] = None,
-    ) -> Optional[Tuple[float, float, float, float, float, float]]:
-        """Compute 3-point Affine transformation parameters in standard mathematical coordinates.
-
-        Canvas X = A * x + B * y + C  (East-West)
-        Canvas Y = D * x + E * y + F  (North-South)
-
-        :param p1: Local pixel coordinate (x1, y1) of ref 1.
-        :param p2: Local pixel coordinate (x2, y2) of ref 2.
-        :param p3: Local pixel coordinate (x3, y3) of ref 3.
-        :param P1: Target mathematical coordinate (math_x1, math_y1) of ref 1.
-        :param P2: Target mathematical coordinate (math_x2, math_y2) of ref 2.
-        :param P3: Target mathematical coordinate (math_x3, math_y3) of ref 3.
-        :param parent: Optional parent QWidget for error message dialogs.
-        :return: Tuple of (A, B, C, D, E, F) or None on error.
-        :rtype: Optional[Tuple[float, float, float, float, float, float]]
-        """
-        x1, y1 = p1
-        x2, y2 = p2
-        x3, y3 = p3
-        X1, Y1 = P1
-        X2, Y2 = P2
-        X3, Y3 = P3
-
-        # Determinant of the 3 points on the local drawing
-        det = x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)
-        if abs(det) < 1e-9:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent,
-                    "計算エラー",
-                    "選択された3つの基準点が同一直線上に存在するため、アフィン変換行列を定義できません。\n同一直線上にない有効な3基準点を指定してください。",
-                )
-            return None
-
-        # Determinant of real coordinates
-        det_real = X1 * (Y2 - Y3) + X2 * (Y3 - Y1) + X3 * (Y1 - Y2)
-        if abs(det_real) < 1e-9:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent,
-                    "計算エラー",
-                    "入力された基準点の実座標3点が同一直線上に存在します。\n三角形を形成する有効な実座標を入力してください。",
-                )
-            return None
-
-        A = (X1 * (y2 - y3) + X2 * (y3 - y1) + X3 * (y1 - y2)) / det
-        B = (X1 * (x3 - x2) + X2 * (x1 - x3) + X3 * (x2 - x1)) / det
-        C = (X1 * (x2 * y3 - x3 * y2) + X2 * (x3 * y1 - x1 * y3) + X3 * (x1 * y2 - x2 * y1)) / det
-
-        D = (Y1 * (y2 - y3) + Y2 * (y3 - y1) + Y3 * (y1 - y2)) / det
-        E = (Y1 * (x3 - x2) + Y2 * (x1 - x3) + Y3 * (x2 - x1)) / det
-        F = (Y1 * (x2 * y3 - x3 * y2) + Y2 * (x3 * y1 - x1 * y3) + Y3 * (x1 * y2 - x2 * y1)) / det
-
-        return (A, B, C, D, E, F)
-
-    @staticmethod
     def apply_helmert(x: float, y: float, params: Dict[str, float]) -> Tuple[float, float]:
         """Apply Helmert transformation formula to a local coordinate in standard mathematical system."""
         a = params["a"]
@@ -214,6 +153,7 @@ class CoordinateTransformer:
                 UIStyleHelper.show_error_dialog(parent, "計算エラー", "座標変換には最低2点以上の基準点が必要です。")
             return None
 
+        # N=2: 2点等比相似変換（ヘルマート変換）
         if n == 2:
             p1, p2 = local_points[0], local_points[1]
             P1, P2 = real_points[0], real_points[1]
@@ -225,61 +165,82 @@ class CoordinateTransformer:
             Tx = h_params["Tx"]
             Ty = h_params["Ty"]
             # World file affine parameters with pixel Y reflection:
-            # X = a*x + b*y + Tx, Y = b*x - a*y + Ty
             # Equivalent affine matrix: A=a, B=b, C=Tx, D=b, E=-a, F=Ty
             return (a, b, Tx, b, -a, Ty)
 
-        # For N >= 3, use least-squares / exact normal equations
-        s_xx = sum(p[0] * p[0] for p in local_points)
-        s_yy = sum(p[1] * p[1] for p in local_points)
-        s_xy = sum(p[0] * p[1] for p in local_points)
-        s_x = sum(p[0] for p in local_points)
-        s_y = sum(p[1] for p in local_points)
-        N = float(n)
+        # N>=3: 5パラメータ非せん断アフィン変換 (最小二乗法で手ブレ誤差を平滑化)
+        try:
+            # 1. まず通常の6パラメータアフィンを初期値推定のために計算
+            M_aff = []
+            b_aff = []
+            for (x, y), (X, Y) in zip(local_points, real_points):
+                M_aff.append([x, y, 1, 0, 0, 0])
+                b_aff.append(X)
+                M_aff.append([0, 0, 0, x, y, 1])
+                b_aff.append(Y)
+            M_aff = np.array(M_aff)
+            b_aff = np.array(b_aff)
 
-        det = (
-            s_xx * (s_yy * N - s_y * s_y)
-            - s_xy * (s_xy * N - s_y * s_x)
-            + s_x * (s_xy * s_y - s_yy * s_x)
-        )
-        if abs(det) < 1e-9:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent,
-                    "計算エラー",
-                    "基準点が同一直線上に存在するため、アフィン変換行列を定義できません。\n有効な基準点を指定してください。",
-                )
-            return None
+            aff_res, _, _, _ = np.linalg.lstsq(M_aff, b_aff, rcond=None)
+            A0, B0, C0, D0, E0, F0 = aff_res
+            
+            # 2. 初期パラメータの推定
+            # 展開式: A = Sx*cosθ, B = Sx*sinθ, D = -Sy*sinθ, E = Sy*cosθ
+            Sx0 = math.hypot(A0, B0)
+            if Sx0 > 1e-9:
+                cos_t0 = A0 / Sx0
+                sin_t0 = B0 / Sx0
+            else:
+                cos_t0, sin_t0 = 1.0, 0.0
 
-        inv00 = (s_yy * N - s_y * s_y) / det
-        inv01 = (s_y * s_x - s_xy * N) / det
-        inv02 = (s_xy * s_y - s_yy * s_x) / det
+            # 鏡映（Y軸反転等）を許容するため Sy0 は負になり得る
+            Sy0 = -D0 * sin_t0 + E0 * cos_t0
+            theta0 = math.atan2(sin_t0, cos_t0)
+            p0 = [Sx0, Sy0, theta0, C0, F0]
 
-        inv10 = inv01
-        inv11 = (s_xx * N - s_x * s_x) / det
-        inv12 = (s_xy * s_x - s_xx * s_y) / det
+            # 3. 5パラメータ非せん断アフィン最適化用 目的関数
+            def residuals(p):
+                Sx, Sy, theta, Tx, Ty = p
+                cos_t = math.cos(theta)
+                sin_t = math.sin(theta)
+                
+                A_p = Sx * cos_t
+                B_p = Sx * sin_t
+                C_p = Tx
+                D_p = -Sy * sin_t
+                E_p = Sy * cos_t
+                F_p = Ty
+                
+                err = []
+                for (px, py), (rx, ry) in zip(local_points, real_points):
+                    err.append(A_p * px + B_p * py + C_p - rx)
+                    err.append(D_p * px + E_p * py + F_p - ry)
+                return err
 
-        inv20 = inv02
-        inv21 = inv12
-        inv22 = (s_xx * s_yy - s_xy * s_xy) / det
+            # 4. 最適化の実行
+            opt_res = least_squares(residuals, p0, method='lm')
+            Sx_opt, Sy_opt, theta_opt, Tx_opt, Ty_opt = opt_res.x
 
-        s_xX = sum(local_points[i][0] * real_points[i][0] for i in range(n))
-        s_yX = sum(local_points[i][1] * real_points[i][0] for i in range(n))
-        s_X = sum(real_points[i][0] for i in range(n))
+            # 5. アフィン6要素に再展開して返却
+            cos_t = math.cos(theta_opt)
+            sin_t = math.sin(theta_opt)
+            A = Sx_opt * cos_t
+            B = Sx_opt * sin_t
+            C = Tx_opt
+            D = -Sy_opt * sin_t
+            E = Sy_opt * cos_t
+            F = Ty_opt
 
-        A = inv00 * s_xX + inv01 * s_yX + inv02 * s_X
-        B = inv10 * s_xX + inv11 * s_yX + inv12 * s_X
-        C = inv20 * s_xX + inv21 * s_yX + inv22 * s_X
+            return (float(A), float(B), float(C), float(D), float(E), float(F))
 
-        s_xY = sum(local_points[i][0] * real_points[i][1] for i in range(n))
-        s_yY = sum(local_points[i][1] * real_points[i][1] for i in range(n))
-        s_Y = sum(real_points[i][1] for i in range(n))
-
-        D = inv00 * s_xY + inv01 * s_yY + inv02 * s_Y
-        E = inv10 * s_xY + inv11 * s_yY + inv12 * s_Y
-        F = inv20 * s_xY + inv21 * s_yY + inv22 * s_Y
-
-        return (A, B, C, D, E, F)
+        except Exception as e:          
+            # 最適化に失敗した場合のフォールバック（通常の最小二乗アフィン）
+            if 'aff_res' in locals():
+                return (float(A0), float(B0), float(C0), float(D0), float(E0), float(F0))
+            else:
+                if parent:
+                    UIStyleHelper.show_error_dialog(parent, "計算エラー", f"座標変換パラメータの算出に失敗しました。\n詳細: {str(e)}")
+                return None
 
     def execute_transformation(
         self,
