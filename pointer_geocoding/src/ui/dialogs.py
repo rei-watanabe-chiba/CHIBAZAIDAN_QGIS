@@ -54,6 +54,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QGroupBox,
+    QComboBox,
 )
 
 try:
@@ -1436,4 +1437,250 @@ class DisplayFilterDialog(QDialog):
             "feature_names": feature_names,
             "target_drawing": target_drawing,
         }
+
+
+
+class PointEditDialog(QDialog):
+    """FEAT-01: Modal dialog for Point Editing"""
+    def __init__(self, layer_manager, feature_data, drawing_names, parent=None):
+        super().__init__(parent)
+        self.layer_manager = layer_manager
+        self.feature_data = dict(feature_data)
+        self.drawing_names = drawing_names
+        self.dialog_action = "cancel"  # "confirm", "delete", "cancel"
+        
+        self.setWindowTitle("点情報編集")
+        self.setModal(True)
+        self.setMinimumWidth(360)
+        
+        self._init_ui()
+        UIStyleHelper.apply_theme(self)
+        self._populate_initial_values()
+        
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Status panel
+        self.panel_status, self.lbl_status = UIStyleHelper.create_status_panel("入力値で更新", "info", self)
+        layout.addWidget(self.panel_status)
+        
+        # Form
+        form_layout = QVBoxLayout()
+        
+        # Attribute
+        self.combo_attribute = QComboBox(self)
+        for value in UILabels.ATTRIBUTE_OPTIONS:
+            self.combo_attribute.addItem(UILabels.ATTRIBUTE_DISPLAY_MAP.get(value, value), value)
+        self.combo_attribute.currentIndexChanged.connect(self._on_category_changed)
+        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.ATTRIBUTE_CODE, self), [(self.combo_attribute, 1)], (3, 7)))
+        
+        # Excavation Type
+        self.combo_excavation_type = QComboBox(self)
+        self.combo_excavation_type.addItems(UILabels.EXCAVATION_OPTIONS)
+        self.combo_excavation_type.currentIndexChanged.connect(self._on_excavation_type_changed)
+        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.EXCAVATION_TYPE, self), [(self.combo_excavation_type, 1)], (3, 7)))
+        
+        # Feature Name
+        self.combo_feature_name = QComboBox(self)
+        self.combo_feature_name.addItem(UILabels.UNREGISTERED)
+        self.combo_feature_name.currentTextChanged.connect(self._validate)
+        self.row_feature_selector = UIStyleHelper.build_flex_row(QLabel(UILabels.FEATURE_SELECTOR, self), [(self.combo_feature_name, 1)], (3, 7))
+        form_layout.addWidget(self.row_feature_selector)
+        
+        # Point Name
+        self.edit_point_name = UIStyleHelper.create_spinbox(1, 999999, 1, self)
+        self.edit_point_name.valueChanged.connect(self._validate)
+        
+        self.edit_point_name_sp = QLineEdit(self)
+        self.edit_point_name_sp.setPlaceholderText(UIPlaceholders.POINT_NAME_SP)
+        if HAS_QT_REGEX:
+            self.edit_point_name_sp.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp))
+        else:
+            self.edit_point_name_sp.setValidator(QRegExpValidator(QRegExp(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp))
+        self.edit_point_name_sp.hide()
+        self.edit_point_name_sp.textChanged.connect(self._validate)
+        
+        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.POINT_NAME, self), [(self.edit_point_name, 1), (self.edit_point_name_sp, 1)], (3, 7)))
+        
+        # Branch No
+        self.edit_branch_no = QLineEdit(self)
+        self.edit_branch_no.setPlaceholderText(UIPlaceholders.BRANCH_NO)
+        self.edit_branch_no.textChanged.connect(self._validate)
+        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.BRANCH_NO, self), [(self.edit_branch_no, 1)], (3, 7)))
+        
+        # Target Drawing
+        self.combo_drawing_name = QComboBox(self)
+        self.combo_drawing_name.addItem(UILabels.DRAWING_UNSPECIFIED)
+        for name in self.drawing_names:
+            if name != UILabels.DRAWING_UNSPECIFIED:
+                self.combo_drawing_name.addItem(name)
+        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel("対象図面", self), [(self.combo_drawing_name, 1)], (3, 7)))
+        
+        layout.addLayout(form_layout)
+        
+        # Actions
+        actions_layout = QHBoxLayout()
+        self.btn_delete = QPushButton(UILabels.BTN_DELETE_POINT, self)
+        self.btn_delete.setStyleSheet("background-color: #D32F2F; color: #FFFFFF; font-weight: bold; border-radius: 4px;")
+        self.btn_delete.clicked.connect(self._on_delete_clicked)
+        
+        self.btn_confirm = QPushButton(UILabels.BTN_CONFIRM, self)
+        UIStyleHelper.set_primary_button(self.btn_confirm)
+        self.btn_confirm.clicked.connect(self._on_confirm_clicked)
+        
+        self.btn_cancel = QPushButton(UILabels.BTN_CANCEL, self)
+        self.btn_cancel.clicked.connect(self.reject)
+        
+        # For double-confirmation of delete
+        self.btn_confirm_delete = QPushButton("削除を実行", self)
+        self.btn_confirm_delete.setStyleSheet("background-color: #D32F2F; color: #FFFFFF; font-weight: bold; border-radius: 4px;")
+        self.btn_confirm_delete.hide()
+        self.btn_confirm_delete.clicked.connect(self._on_confirm_delete_clicked)
+        
+        actions_layout.addWidget(self.btn_delete)
+        actions_layout.addWidget(self.btn_confirm_delete)
+        actions_layout.addStretch()
+        actions_layout.addWidget(self.btn_confirm)
+        actions_layout.addWidget(self.btn_cancel)
+        layout.addLayout(actions_layout)
+        
+    def _populate_initial_values(self):
+        # drawing name
+        d_name = self.feature_data.get("drawing_name", "").strip()
+        target_name = d_name if d_name else UILabels.DRAWING_UNSPECIFIED
+        idx = self.combo_drawing_name.findText(target_name)
+        if idx >= 0: self.combo_drawing_name.setCurrentIndex(idx)
+        
+        # Feature names
+        if self.layer_manager and hasattr(self.layer_manager, "point_layer"):
+            layer = self.layer_manager.point_layer
+            if layer and layer.isValid():
+                idx = layer.fields().indexOf("feature_name")
+                if idx >= 0:
+                    names = set(layer.uniqueValues(idx))
+                    for name in sorted(names):
+                        if str(name).strip() and str(name).strip() not in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成")):
+                            self.combo_feature_name.addItem(str(name).strip())
+        
+        ex_type = str(self.feature_data.get("excavation_type") or ExcavationType.GRID.value)
+        self.combo_excavation_type.setCurrentText(ex_type)
+        
+        if ex_type == ExcavationType.FEATURE.value:
+            feat_name = str(self.feature_data.get("feature_name") or "")
+            if feat_name and self.combo_feature_name.findText(feat_name) < 0:
+                self.combo_feature_name.addItem(feat_name)
+            self.combo_feature_name.setCurrentText(feat_name if feat_name else UILabels.UNREGISTERED)
+            
+        attr_type = str(self.feature_data.get("attribute_type") or AttributeType.S.value)
+        idx = self.combo_attribute.findData(attr_type)
+        if idx >= 0: self.combo_attribute.setCurrentIndex(idx)
+        
+        pname_raw = str(self.feature_data.get("point_name") or "")
+        if attr_type == AttributeType.SP.value:
+            self.edit_point_name_sp.setText(pname_raw)
+        else:
+            try: p_val = int(pname_raw or 1)
+            except ValueError: p_val = 1
+            self.edit_point_name.setValue(p_val)
+            
+        self.edit_branch_no.setText(str(self.feature_data.get("branch_no") or ""))
+        
+        self._on_category_changed()
+        self._on_excavation_type_changed()
+        self._validate()
+
+    def _on_category_changed(self, *args):
+        is_sp = (self.combo_attribute.currentData() == AttributeType.SP.value)
+        self.edit_point_name.setVisible(not is_sp)
+        self.edit_point_name_sp.setVisible(is_sp)
+        self._validate()
+        
+    def _on_excavation_type_changed(self, *args):
+        is_feature = (self.combo_excavation_type.currentText() == ExcavationType.FEATURE.value)
+        self.row_feature_selector.setVisible(is_feature)
+        self._validate()
+
+    def _get_current_point_name(self) -> str:
+        if self.combo_attribute.currentData() == AttributeType.SP.value:
+            return self.edit_point_name_sp.text().strip()
+        else:
+            return str(self.edit_point_name.value())
+
+    def _validate(self, *args):
+        if self.btn_confirm_delete.isVisible():
+            return
+            
+        point_name = self._get_current_point_name()
+        branch_no = self.edit_branch_no.text().strip()
+        ex_type = self.combo_excavation_type.currentText()
+        feat_name = self.combo_feature_name.currentText().strip()
+        if feat_name in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成")):
+            feat_name = ""
+        drawing_name = self.combo_drawing_name.currentText().strip()
+        if drawing_name == UILabels.DRAWING_UNSPECIFIED:
+            drawing_name = ""
+            
+        has_error = False
+        msg = "入力値で更新"
+        status = "info"
+        
+        if ex_type == ExcavationType.FEATURE.value and not feat_name:
+            has_error = True
+            msg = UILabels.STATUS_ERR_FEATURE_REQUIRED
+            status = "error"
+            self.combo_feature_name.setStyleSheet("border: 1px solid red;")
+        else:
+            self.combo_feature_name.setStyleSheet("")
+            
+        if not has_error:
+            # duplicate check
+            if self.layer_manager and hasattr(self.layer_manager, "point_layer"):
+                layer = self.layer_manager.point_layer
+                if layer and layer.isValid():
+                    from ..logic.core import check_point_duplicate
+                    dup = check_point_duplicate(
+                        layer, ex_type, feat_name,
+                        point_name, branch_no, drawing_name, self.feature_data.get("feature_id")
+                    )
+                    if dup:
+                        has_error = True
+                        msg = UILabels.STATUS_ERR_DUPLICATE
+                        status = "error"
+                        if self.combo_attribute.currentData() == AttributeType.SP.value:
+                            self.edit_point_name_sp.setStyleSheet("border: 1px solid red;")
+                        else:
+                            self.edit_point_name.setStyleSheet("border: 1px solid red;")
+                        self.edit_branch_no.setStyleSheet("border: 1px solid red;")
+                    else:
+                        self.edit_point_name_sp.setStyleSheet("")
+                        self.edit_point_name.setStyleSheet("")
+                        self.edit_branch_no.setStyleSheet("")
+        
+        UIStyleHelper.update_status_panel(self.panel_status, self.lbl_status, msg, status)
+        self.btn_confirm.setEnabled(not has_error)
+        
+    def _on_delete_clicked(self):
+        self.btn_delete.hide()
+        self.btn_confirm.hide()
+        self.btn_confirm_delete.show()
+        UIStyleHelper.update_status_panel(self.panel_status, self.lbl_status, "削除してよろしいですか？", "warning")
+        
+    def _on_confirm_delete_clicked(self):
+        self.dialog_action = "delete"
+        self.accept()
+        
+    def _on_confirm_clicked(self):
+        self.dialog_action = "confirm"
+        self.feature_data["attribute_type"] = self.combo_attribute.currentData()
+        self.feature_data["excavation_type"] = self.combo_excavation_type.currentText()
+        feat_name = self.combo_feature_name.currentText().strip()
+        if feat_name in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成")):
+            feat_name = ""
+        self.feature_data["feature_name"] = feat_name if self.feature_data["excavation_type"] == ExcavationType.FEATURE.value else ""
+        self.feature_data["point_name"] = self._get_current_point_name()
+        self.feature_data["branch_no"] = self.edit_branch_no.text().strip()
+        d_name = self.combo_drawing_name.currentText().strip()
+        if d_name == UILabels.DRAWING_UNSPECIFIED: d_name = ""
+        self.feature_data["drawing_name"] = d_name
+        self.accept()
 

@@ -222,8 +222,6 @@ class Tab2DigitizingMixin:
         self.lbl_point_name = QLabel(UILabels.POINT_NAME, self.group_point_info)
         self.edit_point_name = UIStyleHelper.create_spinbox(1, 999999, 1, self.group_point_info)
         self.edit_point_name.valueChanged.connect(self._on_point_identity_changed)
-        self.edit_point_name.editingFinished.connect(self._commit_point_identity_if_editing)
-
         self.edit_point_name_sp = QLineEdit(self.group_point_info)
         self.edit_point_name_sp.setPlaceholderText(UIPlaceholders.POINT_NAME_SP)
         if HAS_QT_REGEX:
@@ -238,8 +236,6 @@ class Tab2DigitizingMixin:
             )
         self.edit_point_name_sp.hide()
         self.edit_point_name_sp.textChanged.connect(self._on_point_identity_changed)
-        self.edit_point_name_sp.editingFinished.connect(self._commit_point_identity_if_editing)
-
         row_point_name = UIStyleHelper.build_flex_row(
             self.lbl_point_name,
             [(self.edit_point_name, 1), (self.edit_point_name_sp, 1)],
@@ -253,7 +249,6 @@ class Tab2DigitizingMixin:
         self.edit_branch_no.setShowClearButton(True)
         self.edit_branch_no.setPlaceholderText(UIPlaceholders.BRANCH_NO)
         self.edit_branch_no.textChanged.connect(self._on_branch_text_changed)
-        self.edit_branch_no.editingFinished.connect(self._commit_point_identity_if_editing)
         row_branch_no = UIStyleHelper.build_flex_row(
             self.lbl_branch_no,
             [(self.edit_branch_no, 1)],
@@ -333,7 +328,6 @@ class Tab2DigitizingMixin:
         for value in UILabels.ATTRIBUTE_OPTIONS:
             self.combo_attribute.addItem(UILabels.ATTRIBUTE_DISPLAY_MAP.get(value, value), value)
         self.combo_attribute.currentIndexChanged.connect(self._on_category_changed)
-        self.combo_attribute.currentIndexChanged.connect(self._commit_attribute_fields_if_editing)
         row_attribute = UIStyleHelper.build_flex_row(
             self.lbl_attribute,
             [(self.combo_attribute, 1)],
@@ -1392,10 +1386,17 @@ class Tab2DigitizingMixin:
         """
         self.tab2_current_mode = "new" if index == 0 else "edit"
         self._is_out_of_bounds = False
+        is_new = (self.tab2_current_mode == "new")
         if hasattr(self, "widget_new_mode_actions"):
-            self.widget_new_mode_actions.setVisible(self.tab2_current_mode == "new")
+            self.widget_new_mode_actions.setVisible(is_new)
         if hasattr(self, "widget_edit_mode_actions"):
-            self.widget_edit_mode_actions.setVisible(self.tab2_current_mode == "edit")
+            self.widget_edit_mode_actions.setVisible(not is_new)
+            
+        # Disable widgets in edit mode to prevent accidental input
+        if hasattr(self, "edit_point_name"): self.edit_point_name.setEnabled(is_new)
+        if hasattr(self, "edit_point_name_sp"): self.edit_point_name_sp.setEnabled(is_new)
+        if hasattr(self, "edit_branch_no"): self.edit_branch_no.setEnabled(is_new)
+        if hasattr(self, "group_attribute_panel"): self.group_attribute_panel.setEnabled(is_new)
         # T-0042: switching back to 新規モード while an edit-mode selection is
         # still held (selected_edit_point_id) leaves the duplicate-check
         # exclusion and edit_point_name value stale, letting a duplicate
@@ -1724,36 +1725,7 @@ class Tab2DigitizingMixin:
         return True
 
     def _commit_point_identity_if_editing(self, *args: Any) -> None:
-        """Real-time commit of edit_point_name(_sp)/edit_branch_no to the
-        selected existing feature (T-0038).
-
-        Connected to the editingFinished signal of edit_point_name,
-        edit_point_name_sp and edit_branch_no. No-op in 新規モード
-        (self.selected_edit_point_id is None), while the existing-point form
-        is still being populated (self._suppress_realtime_commit, see
-        _on_existing_point_selected), or whenever the live 点情報パネル
-        validation (self._point_info_has_error, refreshed by
-        _update_point_info_status on every keystroke) reports 遺構名未指定 or
-        点名重複エラー -- matching the former btn_rename_point guard so an
-        invalid value is never written.
-
-        :param args: Unused signal payload (editingFinished carries none).
-        :type args: Any
-        """
-        if getattr(self, "_suppress_realtime_commit", False):
-            return
-        if self.selected_edit_point_id is None or not self.point_layer:
-            return
-        if getattr(self, "_point_info_has_error", False):
-            return
-
-        point_name, branch_no = self._get_current_point_name_and_branch()
-        if not point_name:
-            return
-
-        if self._commit_fields_to_feature({"point_name": point_name, "branch_no": branch_no}):
-            self._refresh_point_info_labels(override=self._selected_point_data)
-            self._update_point_info_status()
+        pass
 
     def _commit_attribute_fields_if_editing(self, *args: Any) -> None:
         """Real-time commit of 出土形態/遺構名/カラー/属性記号 to the selected
@@ -2228,74 +2200,57 @@ class Tab2DigitizingMixin:
 
     @pyqtSlot(dict)
     def _on_existing_point_selected(self, data: dict) -> None:
-        """Load an existing point's attributes into the dock widget for editing.
+        """Launch PointEditDialog to edit the selected point."""
+        from .dialogs import PointEditDialog
+        
+        # Block map interaction
+        if getattr(self, "map_tool", None) and hasattr(self.map_tool, "set_interaction_locked"):
+            self.map_tool.set_interaction_locked(True)
+            
+        dialog = PointEditDialog(
+            layer_manager=self.layer_manager,
+            feature_data=data,
+            drawing_names=self._get_drawing_layer_names(),
+            parent=self
+        )
+        
+        result = dialog.exec_()
+        
+        if getattr(self, "map_tool", None) and hasattr(self.map_tool, "set_interaction_locked"):
+            self.map_tool.set_interaction_locked(False)
+            
+        if result == QDialog.Accepted:
+            if dialog.dialog_action == "delete":
+                self.selected_edit_point_id = data.get("feature_id")
+                self._on_delete_selected_point()
+            elif dialog.dialog_action == "confirm" and self.point_layer:
+                fid = data.get("feature_id")
+                updates = {
+                    "drawing_name": dialog.feature_data["drawing_name"],
+                    "excavation_type": dialog.feature_data["excavation_type"],
+                    "feature_name": dialog.feature_data["feature_name"],
+                    "attribute_type": dialog.feature_data["attribute_type"],
+                    "point_name": dialog.feature_data["point_name"],
+                    "branch_no": dialog.feature_data["branch_no"],
+                }
+                
+                with (self.busy_interaction_guard() if hasattr(self, "busy_interaction_guard") else __import__('contextlib').nullcontext()):
+                    field_names = self.point_layer.fields().names()
+                    self.point_layer.startEditing()
+                    for field_name, value in updates.items():
+                        if field_name in field_names:
+                            idx = field_names.index(field_name)
+                            self.point_layer.changeAttributeValue(fid, idx, value)
+                    self.point_layer.commitChanges()
+                    
+                    if self.is_focus_mode_active():
+                        self.update_symbology_opacity()
+                        
+                    self.canvas.refresh()
+                    
+        # Reset selection state
+        self._reset_point_selection()
 
-        T-0038: sets self._suppress_realtime_commit while populating the form
-        widgets below, so the editingFinished/currentIndexChanged real-time
-        commit handlers (_commit_point_identity_if_editing/
-        _commit_attribute_fields_if_editing) do not fire spurious writes back
-        to the very feature being loaded.
-        """
-        self._suppress_realtime_commit = True
-        self.selected_edit_point_id = data.get("feature_id")
-        # T-0023: retain the full loaded data (drawing_name is immutable
-        # while selected; excavation_type/feature_name/attribute_type/
-        # point_name/branch_no are now editable in-place and committed in
-        # real time, see _commit_point_identity_if_editing/
-        # _commit_attribute_fields_if_editing) for reuse and for keeping
-        # local state in sync after in-place commits.
-        self._selected_point_data = dict(data)
-
-        # Select drawing if present
-        d_name = str(data.get("drawing_name") or "").strip()
-        target_name = d_name if d_name else UILabels.DRAWING_UNSPECIFIED
-        self._ensure_drawing_selected(target_name)
-        if d_name:
-            self._ensure_drawing_visible(d_name)
-
-        ex_type = str(data.get("excavation_type") or ExcavationType.GRID.value)
-        self.combo_excavation_type.setCurrentText(ex_type)
-
-        if ex_type == ExcavationType.FEATURE.value:
-            feat_name = str(data.get("feature_name") or "")
-            self.register_new_feature_name(feat_name)
-            color_code = str(data.get("color_code") or "#FF5722")
-            self.current_feature_color = QColor(color_code)
-            self._update_color_picker_button()
-
-        # T-0022: attribute must be applied before the point-name value, since
-        # changing combo_attribute triggers _on_category_changed. T-0032:
-        # since self.selected_edit_point_id is already set above,
-        # _on_category_changed now skips auto-numbering (see its docstring),
-        # so this no longer clobbers the point_name value set below.
-        attr_type = str(data.get("attribute_type") or AttributeType.S.value)
-        self._set_attribute_value(attr_type)
-
-        pname_raw = str(data.get("point_name") or "")
-        if attr_type == AttributeType.SP.value:
-            self.edit_point_name_sp.setText(pname_raw)
-        else:
-            try:
-                p_val = int(pname_raw or 1)
-            except ValueError:
-                p_val = 1
-            self.edit_point_name.setValue(p_val)
-        self._update_point_name_widget_visibility()
-
-        self.edit_branch_no.setText(str(data.get("branch_no") or ""))
-
-        # T-0038: widget_edit_mode_actions (btn_delete_point) visibility is
-        # driven solely by tab2_current_mode via _on_tab2_mode_changed, not
-        # by whether a point is currently selected (T-0036/T-0037); the
-        # former row_existing_actions.show()/btn_update_attribute.show()
-        # calls that used to live here are retired along with those widgets.
-        self._set_category_widgets_locked(True)
-        # T-0027: force the final display to reflect the loaded feature data,
-        # overriding any transient normal-mode refresh triggered by the
-        # combo/attribute assignments above.
-        self._refresh_point_info_labels(override=data)
-        self._update_point_info_status()
-        self._suppress_realtime_commit = False
 
     @pyqtSlot()
     def _on_blank_click_in_edit_mode(self) -> None:
