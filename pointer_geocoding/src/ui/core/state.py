@@ -14,7 +14,7 @@ class UIState:
     selected_point_id: Optional[int] = None
     selected_point_data: Optional[Dict[str, Any]] = None
     has_digitized_with_branch: bool = False
-    selected_drawing_name: str = ""  # ← 追加: 選択中の対象図面
+    selected_drawing_name: str = ""
     
     # 3. 制御フラグ
     suppress_realtime_commit: bool = False
@@ -34,11 +34,15 @@ class UIState:
     current_feature_color: str = "#FF5722"
     feature_name_list: List[str] = field(default_factory=list)
 
-    # 6. 画像管理 (Tab1) 状態 ← 追加
+    # 6. 画像管理 (Tab1) 状態
     current_copied_image_path: Optional[str] = None
     confirmed_layer_name: Optional[str] = None
     calculated_affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
     ref_points_data: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # 7. プログラムからの入力制御・UIロック状態
+    is_processing: bool = False
+    digitizing_inputs: Dict[str, Any] = field(default_factory=dict)
 
 class UIAction:
     """状態更新の意図を表現する基底クラス"""
@@ -196,6 +200,13 @@ class UIStateStore(QObject):
             new_state_kwargs['is_out_of_bounds'] = action.is_out_of_bounds
         elif isinstance(action, SetSuppressCommitAction):
             new_state_kwargs['suppress_realtime_commit'] = action.suppress
+        elif isinstance(action, SetProcessingAction):
+            new_state_kwargs['is_processing'] = action.is_processing
+        elif isinstance(action, UpdateDigitizingInputsAction):
+            # 既存の入力値キャッシュに新しい入力値をマージして更新
+            current_inputs = dict(self._state.digitizing_inputs)
+            current_inputs.update(action.inputs)
+            new_state_kwargs['digitizing_inputs'] = current_inputs
             
         # 状態リセット（クリーンアップ）
         elif isinstance(action, ResetSelectionAction):
@@ -216,3 +227,10 @@ class UIStateStore(QObject):
             self._state = new_state
             if emit_signal:
                 self.state_changed.emit(self._state, diff)
+@dataclass
+class SetProcessingAction(UIAction):
+    is_processing: bool
+
+@dataclass
+class UpdateDigitizingInputsAction(UIAction):
+    inputs: Dict[str, Any]
