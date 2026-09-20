@@ -7,6 +7,23 @@ from ...ui.constants import UIConfig, UILabels, UIPlaceholders
 from ...ui.core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
 
 # -------------------------------------------------------------------------
+# Tab 2: モード切替パネル (tab2_mode_toggle)
+# -------------------------------------------------------------------------
+TAB2_MODE_TOGGLE_SPEC = PanelSpec(
+    panel_id="tab2_mode_toggle",
+    fields=[
+        FieldSpec(
+            field_id="tab2_mode",
+            widget_type=WidgetType.SEGMENTED_TOGGLE,
+            options=[UILabels.TAB2_MODE_NEW, UILabels.TAB2_MODE_EDIT],
+            default_index=0,
+            main_ratio=(0, 10),
+            on_change="mode_changed",
+        ),
+    ],
+)
+
+# -------------------------------------------------------------------------
 # Tab 2: 点情報パネル (group_point_info)
 # -------------------------------------------------------------------------
 TAB2_POINT_INFO_SPEC = PanelSpec(
