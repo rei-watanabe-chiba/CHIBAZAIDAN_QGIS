@@ -223,7 +223,7 @@ class ImageGeorefTool(QgsMapTool):
 
         # Import UIConfig lazily to avoid circular imports if any, or directly if okay.
         # Actually it's easier to just use hardcoded default or import.
-        from ..ui.dock import UIConfig
+        from ..ui.main_dock import UIConfig
 
         marker = QgsVertexMarker(self.canvas)
         marker.setIconType(QgsVertexMarker.ICON_CROSS)

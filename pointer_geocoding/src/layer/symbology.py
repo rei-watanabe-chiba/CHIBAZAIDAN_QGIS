@@ -354,7 +354,7 @@ class SymbologyMixin:
         if not layer or not layer.isValid():
             return
 
-        from ..ui.dock import UIConfig
+        from ..ui.main_dock import UIConfig
 
         # Resolve display values from settings or UIConfig defaults
         sym_size    = float((settings or {}).get("ref_symbol_size",       (settings or {}).get("symbol_size", UIConfig.SYMBOL_SIZE_REF)))

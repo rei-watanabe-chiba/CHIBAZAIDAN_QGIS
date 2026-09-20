@@ -5,6 +5,7 @@
 """
 import os
 from typing import Optional, Dict, Any
+import traceback
 
 from qgis.core import QgsProject, Qgis
 from qgis.gui import QgisInterface
@@ -21,11 +22,7 @@ class PointerGeocodingPlugin:
     """Main plugin entry class managing lifecycle, UI integration, and session orchestration."""
 
     def __init__(self, iface: QgisInterface) -> None:
-        """Initialize the plugin instance.
-
-        :param iface: QGIS interface reference.
-        :type iface: QgisInterface
-        """
+        """Initialize the plugin instance."""
         self.iface = iface
         self.plugin_dir = os.path.dirname(__file__)
         self.action: Optional[QAction] = None
@@ -35,16 +32,8 @@ class PointerGeocodingPlugin:
         self.dock_widget: Optional[Any] = None
 
     def _get_icon(self) -> QIcon:
-        """Obtain the plugin icon from SVG/PNG file or generate a fallback icon dynamically.
-
-        Prioritizes vector icon.svg for High DPI displays.
-
-        :return: QIcon instance.
-        :rtype: QIcon
-        """
+        """Obtain the plugin icon from SVG/PNG file or generate a fallback icon dynamically."""
         # 1. Prioritize icon.svg for crisp High DPI scaling
-        # T-0024: icon assets moved under plugin_dir/icon/ (alongside the new
-        # top-row button icons image.svg/setting.svg/output.svg/save.svg).
         svg_path = os.path.join(self.plugin_dir, "icon", "icon.svg")
         if os.path.exists(svg_path):
             return QIcon(svg_path)
@@ -103,15 +92,7 @@ class PointerGeocodingPlugin:
         self._teardown_dock_widget()
 
     def _teardown_dock_widget(self) -> None:
-        """Unregister and dispose of the main dock widget (T-0024).
-
-        T-0024: the former left dock (self.dock_widget.left_dock,
-        Qt.LeftDockWidgetArea, introduced in T-0021) has been removed; the
-        plugin now registers only a single dock widget (self.dock_widget,
-        Qt.RightDockWidgetArea). Its own auxiliary dialogs (image/settings/
-        output) are plain child QDialogs, so Qt's normal parent-child
-        cleanup via deleteLater() below is sufficient for them.
-        """
+        """Unregister and dispose of the main dock widget (T-0024)."""
         if self.dock_widget is None:
             return
 
@@ -141,54 +122,52 @@ class PointerGeocodingPlugin:
         session_data = dialog.get_session_data()
 
         # 3. Process session based on type
-        if session_data["session_type"] == "NEW":
-            success, message, layers_dict = self.layer_manager.setup_new_session(
-                parent_dir=session_data["parent_dir_path"],
-                session_name=session_data["session_name"],
-                image_file_path=session_data["image_file_path"],
-                grid_config=session_data.get("grid_config"),
-            )
-        else:
-            success, message, layers_dict = self.layer_manager.load_existing_session(
-                session_dir=session_data["session_dir_path"],
-                grid_config=session_data.get("grid_config"),
+        try:
+            if session_data["session_type"] == "NEW":
+                success, message, layers_dict = self.layer_manager.setup_new_session(
+                    parent_dir=session_data["parent_dir_path"],
+                    session_name=session_data["session_name"],
+                    image_file_path=session_data["image_file_path"],
+                    grid_config=session_data.get("grid_config"),
+                )
+            else:
+                success, message, layers_dict = self.layer_manager.load_existing_session(
+                    session_dir=session_data["session_dir_path"],
+                    grid_config=session_data.get("grid_config"),
+                )
+
+            if not success:
+                QMessageBox.critical(
+                    self.iface.mainWindow(),
+                    UIMessages.ERR_TITLE_SESSION,
+                    UIMessages.ERR_SESSION_INIT_FAILED.format(message=message),
+                )
+                return
+
+            # Notify success on QGIS message bar
+            self.iface.messageBar().pushMessage(
+                UIMessages.MSG_TITLE_PLUGIN,
+                message,
+                level=Qgis.MessageLevel.Success,
+                duration=5,
             )
 
-        if not success:
+            # 4. Initialize and show MainDockWidget if available
+            self._setup_dock_widget(layers_dict)
+
+        except Exception as e:
             QMessageBox.critical(
                 self.iface.mainWindow(),
-                UIMessages.ERR_TITLE_SESSION,
-                UIMessages.ERR_SESSION_INIT_FAILED.format(message=message),
+                "セッションエラー",
+                f"セッションの初期化中に例外が発生しました:\n{str(e)}\n\n{traceback.format_exc()}"
             )
             return
 
-        # Notify success on QGIS message bar
-        self.iface.messageBar().pushMessage(
-            UIMessages.MSG_TITLE_PLUGIN,
-            message,
-            level=Qgis.MessageLevel.Success,
-            duration=5,
-        )
-
-        # 4. Initialize and show MainDockWidget if available (Step 2 integration)
-        self._setup_dock_widget(layers_dict)
-
     def _setup_dock_widget(self, layers_dict: Optional[Dict[str, Any]]) -> None:
-        """Instantiate and attach the main dock widget to the QGIS interface.
-
-        Gracefully notifies if MainDockWidget is not yet created (during Step 1).
-
-        T-0024: MainDockWidget is now a single QDockWidget (Qt.RightDockWidgetArea)
-        hosting a top row of 画像/設定/出力/保存 buttons plus the always-visible
-        main digitizing area; the former left dock (T-0021) has been removed,
-        and 画像/設定/出力 now each open their own independent modeless dialog
-        (built internally by MainDockWidget) instead.
-
-        :param layers_dict: Dictionary containing session and layer references.
-        :type layers_dict: Optional[Dict[str, Any]]
-        """
+        """Instantiate and attach the main dock widget to the QGIS interface."""
         try:
-            from .ui.dock import MainDockWidget
+            # 修正ポイント: .ui.dock ではなく .ui.main_dock を参照
+            from .ui.main_dock import MainDockWidget
 
             self._teardown_dock_widget()
 
@@ -198,11 +177,10 @@ class PointerGeocodingPlugin:
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget)
             self.dock_widget.show()
 
-        except ImportError:
-            # Step 1 environment: main_dock.py has not been generated yet
+        except ImportError as e:
             self.iface.messageBar().pushMessage(
-                UIMessages.MSG_TITLE_PLUGIN,
-                UIMessages.MSG_STEP1_READY,
-                level=Qgis.MessageLevel.Info,
-                duration=7,
+                "モジュールインポートエラー",
+                f"UIのロードに失敗しました。ファイル名やディレクトリ構成を確認してください: {str(e)}",
+                level=Qgis.MessageLevel.Critical,
+                duration=10,
             )
