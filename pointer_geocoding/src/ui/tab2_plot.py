@@ -31,7 +31,7 @@ combo_feature_name/点名入力欄に赤枠を表示(_update_error_borders)。T-
 のみに戻した。
 
 T-0038 (3段階UX改善の3/3、最終段): 編集モードで既設点を選択している間
-(self.selected_edit_point_id is not None)、点名/枝番/出土形態/遺構名/属性の各
+(self.tab2_state.selected_edit_point_id is not None)、点名/枝番/出土形態/遺構名/属性の各
 ウィジェットの値確定シグナル(QSpinBox/QLineEditはeditingFinished、QComboBoxは
 currentIndexChanged/currentTextChanged)で直接フィーチャへコミットするように
 変更し、旧「点名変更」(btn_rename_point/_on_rename_point_clicked)・
@@ -39,7 +39,7 @@ currentIndexChanged/currentTextChanged)で直接フィーチャへコミット�
 廃止した。実コミット処理は共通ヘルパー _commit_fields_to_feature に集約し、
 _commit_point_identity_if_editing/_commit_attribute_fields_if_editing から
 呼び出す。新規モード中や、_on_existing_point_selected によるフォームへの
-既設値ロード中(self._suppress_realtime_commit)は一切コミットしない。
+既設値ロード中(self.tab2_state.suppress_realtime_commit)は一切コミットしない。
 """
 
 import os
@@ -127,18 +127,21 @@ class Tab2DigitizingMixin:
 
     def _create_tab2_ui(self) -> QWidget:
         """Construct Tab 2: 3 always-expanded panels.
+        
+                ① 点情報パネル (group_point_info) — title-less, HLine区切り; 左ボーダー
+                   色分けフレーム内に状態文言(新規点作成/既設点編集/エラー)+出土形態・
+                   点名/枝番・XY座標をまとめた複数行テキストを表示。フレームの外(下)に
+                   editable 点名/枝番 inputs + 既設点のみの削除/点名変更(コミット)ボタン;
+                ② 属性パネル (group_attribute_panel) — title-less、HLine区切り;
+                   属性→出土形態→遺構名→(作成・カラーの行)→対象図面、既設点編集時のみの
+                   属性変更ボタン;
+                ③ 表示設定パネル (group_display) — title-less、HLine区切り;
+                   フォーカスモード(ON/OFFトグルとスライダー)、基準点表示設定、
+                   図面選択リスト (table_drawing_list) を統合。
+                """
+        from .tab2.tab2_schemas import TAB2_POINT_INFO_SPEC, TAB2_ATTRIBUTE_SPEC, TAB2_DISPLAY_FILTER_SPEC
+        from .core import CoreUIBuilder
 
-        ① 点情報パネル (group_point_info) — title-less, HLine区切り; 左ボーダー
-           色分けフレーム内に状態文言(新規点作成/既設点編集/エラー)+出土形態・
-           点名/枝番・XY座標をまとめた複数行テキストを表示。フレームの外(下)に
-           editable 点名/枝番 inputs + 既設点のみの削除/点名変更(コミット)ボタン;
-        ② 属性パネル (group_attribute_panel) — title-less、HLine区切り;
-           属性→出土形態→遺構名→(作成・カラーの行)→対象図面、既設点編集時のみの
-           属性変更ボタン;
-        ③ 表示設定パネル (group_display) — title-less、HLine区切り;
-           フォーカスモード(ON/OFFトグルとスライダー)、基準点表示設定、
-           図面選択リスト (table_drawing_list) を統合。
-        """
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -154,18 +157,10 @@ class Tab2DigitizingMixin:
         layout.setSpacing(0)
 
         # =============================================================
-        # T-0036: tab2先頭の新規/編集モード切替トグル。tab1_georef_mixin.py の
-        # self.tab1_mode_container/tab1_mode_buttons と同じ
-        # UIStyleHelper.build_segmented_toggle() パターンを踏襲する。
-        # 今回はUI表示の切替(点情報パネルのボタンエリア)のみを担当し、
-        # 既存のselected_edit_point_id/キャンバスクリック処理には接続しない
-        # (実際のクリック挙動連動はT-0037で別途実装)。
+        # 先頭：新規/編集モード切替トグル（T-0036手動構築維持）
         # =============================================================
-        self.tab2_current_mode = "new"
-        # T-0038: guards against real-time field-commit handlers firing while
-        # _on_existing_point_selected() is programmatically populating the
-        # form widgets from a freshly loaded feature (see that method).
-        self._suppress_realtime_commit = False
+        self.tab2_state.current_mode = "new"
+        self.tab2_state.suppress_realtime_commit = False
         self.tab2_mode_container, self.tab2_mode_buttons = UIStyleHelper.build_segmented_toggle(
             [UILabels.TAB2_MODE_NEW, UILabels.TAB2_MODE_EDIT], default_index=0, parent=container
         )
@@ -182,279 +177,105 @@ class Tab2DigitizingMixin:
         self.tab2_mode_buttons[1].toggled.connect(lambda checked: self._on_tab2_mode_changed(1) if checked else None)
 
         # =============================================================
-        # Panel 1: 点情報パネル (T-0033: title removed; the status band +
-        # 出土形態/点名+枝番/XY座標 summary is now a single flat multi-line
-        # QLabel inside a left-border color-coded QFrame, matching
-        # start_dialog.py's panel_preview_status style. The editable
-        # point-name/branch inputs and existing-point-only action buttons
-        # live below this frame, outside of it. T-0034: the leading HLine
-        # separator that used to precede this panel was removed because
-        # main_dock.py now places its own separator directly above
-        # tab2_container, avoiding two adjacent separators.)
+        # Panel 1: 点情報パネル (CoreUI)
         # =============================================================
-        self.group_point_info = QGroupBox(container)
-        info_layout = QVBoxLayout(self.group_point_info)
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(UIConfig.PANEL_MARGIN)
-
-        # T-0033: flat multi-line summary (status + 出土形態 + 点名+枝番 +
-        # XY座標) inside a create_status_panel()-style left-border frame;
-        # color-coded via _update_point_info_status() (新規点作成=info/blue,
-        # 既設点編集=warning/orange, エラー=error/red -- reusing the same
-        # QFrame[statusType=...] styles as start_dialog.py's
-        # panel_preview_status, no dedicated "editing" style needed).
-        self.panel_point_info, self.lbl_point_info_status = UIStyleHelper.create_status_panel(
-            UILabels.STATUS_NEW_POINT, status_type="info", parent=self.group_point_info
+        self.tab2_state.autonum_mode = "auto"
+        point_info_panel = CoreUIBuilder.build(TAB2_POINT_INFO_SPEC, parent=container)
+        self.group_point_info = point_info_panel.widget
+        
+        # ステータスパネルとラベルの設定
+        self.panel_point_info = point_info_panel.get("point_info_summary")
+        self.lbl_point_info_status = QLabel(self.panel_point_info)
+        self.lbl_point_info_status.setWordWrap(True)
+        self.panel_point_info.layout().addWidget(self.lbl_point_info_status)
+        UIStyleHelper.update_status_panel(
+            self.panel_point_info, self.lbl_point_info_status, UILabels.STATUS_NEW_POINT, "info"
         )
-        info_layout.addWidget(self.panel_point_info)
-
-        # 番号・枝番 (editable inputs, directly under the summary panel
-        # above). T-0032: no longer force-disabled while an existing point
-        # is selected (see _CATEGORY_LOCK_WIDGET_NAMES). T-0038: editing
-        # these while an existing point is selected now commits directly to
-        # the selected feature in real time (on editingFinished, see
-        # _commit_point_identity_if_editing), replacing the former
-        # PointRenameDialog / btn_rename_point confirm-button flow.
-        # [EXCEPTION PROTECTION: QSpinBox preserved for S/P/C attributes per
-        # OSネイティブUI保護原則]. T-0022: SP属性選択時のみ、専用の自由入力
-        # QLineEdit(半角英数字・ハイフン・アンダースコアのみ)をこれと並置し、
-        # 表示/非表示を切り替える(QSpinBoxは変更しない)。
-        self.lbl_point_name = QLabel(UILabels.POINT_NAME, self.group_point_info)
-        self.edit_point_name = UIStyleHelper.create_spinbox(1, 999999, 1, self.group_point_info)
-        self.edit_point_name.valueChanged.connect(self._on_point_identity_changed)
-        self.edit_point_name_sp = QLineEdit(self.group_point_info)
-        self.edit_point_name_sp.setPlaceholderText(UIPlaceholders.POINT_NAME_SP)
+        
+        # フィールドの参照取得
+        self.edit_point_name = point_info_panel.get("point_name")
+        self.edit_point_name_sp = point_info_panel.get("point_name_sp")
+        self.edit_branch_no = point_info_panel.get("branch_no")
+        
         if HAS_QT_REGEX:
             self.edit_point_name_sp.setValidator(
-                QRegularExpressionValidator(
-                    QRegularExpression(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp
-                )
+                QRegularExpressionValidator(QRegularExpression(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp)
             )
         else:
             self.edit_point_name_sp.setValidator(
                 QRegExpValidator(QRegExp(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp)
             )
-        self.edit_point_name_sp.hide()
-        self.edit_point_name_sp.textChanged.connect(self._on_point_identity_changed)
-        row_point_name = UIStyleHelper.build_flex_row(
-            self.lbl_point_name,
-            [(self.edit_point_name, 1), (self.edit_point_name_sp, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        info_layout.addWidget(row_point_name)
+            
+        self.tab2_autonum_container = point_info_panel.get_row("autonum_mode")
+        self.tab2_autonum_buttons = point_info_panel.get_buttons("autonum_mode")
+        self.widget_new_mode_actions = self.tab2_autonum_container
+        
+        self.widget_edit_mode_actions = point_info_panel.get_row("edit_mode_actions")
+        self.btn_delete_point = point_info_panel.get("delete_point")
 
-        self.lbl_branch_no = QLabel(UILabels.BRANCH_NO, self.group_point_info)
-        self.edit_branch_no = QgsFilterLineEdit(self.group_point_info)
-        self.edit_branch_no.setShowClearButton(True)
-        self.edit_branch_no.setPlaceholderText(UIPlaceholders.BRANCH_NO)
-        self.edit_branch_no.textChanged.connect(self._on_branch_text_changed)
-        row_branch_no = UIStyleHelper.build_flex_row(
-            self.lbl_branch_no,
-            [(self.edit_branch_no, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        info_layout.addWidget(row_branch_no)
-
-        # T-0038: the former "既設点のみ" 点名変更 confirm-button row
-        # (row_existing_actions/btn_rename_point) is retired now that
-        # editing point-name/branch while an existing point is selected
-        # commits in real time (see edit_point_name(_sp)/edit_branch_no
-        # editingFinished wiring above and _commit_point_identity_if_editing).
-        # Only the mode-linked button area below (widget_edit_mode_actions,
-        # holding btn_delete_point) remains for existing-point-only actions.
-
-        # =============================================================
-        # T-0036: モード連動ボタンエリア。新規モード=自動連番/解除トグル
-        # (自動連番=既存の直前打刻追従型採番を適用/解除=点名フィールドへの
-        # 自動上書きをスキップしユーザーの手入力を許す。SP属性選択時は
-        # 元々自動採番の対象外なので、トグルは自動的に「解除」側へ固定し
-        # 無効化する。see _update_autonum_toggle_for_sp)、
-        # 編集モード=削除のみ(btn_delete_point。既存の削除ロジックは変更しない)。
-        # この2つの領域はtab2_current_mode(①のトグル)に連動して表示/非表示を
-        # 切り替えるのみで、selected_edit_point_id/キャンバスクリック処理とは
-        # 独立している(T-0037で別途統合予定)。
-        # =============================================================
-        self.tab2_autonum_mode = "auto"
-        self.tab2_autonum_container, self.tab2_autonum_buttons = UIStyleHelper.build_segmented_toggle(
-            [UILabels.AUTONUM_MODE_AUTO, UILabels.AUTONUM_MODE_RELEASE],
-            default_index=0,
-            parent=self.group_point_info,
-        )
-        self.tab2_autonum_buttons[0].toggled.connect(
-            lambda checked: self._on_tab2_autonum_mode_changed(0) if checked else None
-        )
-        self.tab2_autonum_buttons[1].toggled.connect(
-            lambda checked: self._on_tab2_autonum_mode_changed(1) if checked else None
-        )
-
-        self.widget_new_mode_actions = QWidget(self.group_point_info)
-        new_mode_actions_layout = QHBoxLayout(self.widget_new_mode_actions)
-        new_mode_actions_layout.setContentsMargins(0, 0, 0, 0)
-        new_mode_actions_layout.setSpacing(8)
-        new_mode_actions_layout.addWidget(self.tab2_autonum_container)
-        info_layout.addWidget(self.widget_new_mode_actions)
-
-        self.widget_edit_mode_actions = QWidget(self.group_point_info)
-        edit_mode_actions_layout = QHBoxLayout(self.widget_edit_mode_actions)
-        edit_mode_actions_layout.setContentsMargins(0, 0, 0, 0)
-        edit_mode_actions_layout.setSpacing(8)
-
-        self.btn_delete_point = QPushButton(UILabels.BTN_DELETE_POINT, self.widget_edit_mode_actions)
-        self.btn_delete_point.clicked.connect(self._on_delete_selected_point)
-        edit_mode_actions_layout.addWidget(self.btn_delete_point)
-
-        info_layout.addWidget(self.widget_edit_mode_actions)
-        self.widget_edit_mode_actions.hide()
+        point_info_panel.bind("point_identity_changed", self._on_point_identity_changed)
+        point_info_panel.bind("branch_text_changed", self._on_branch_text_changed)
+        point_info_panel.bind("autonum_mode_changed", self._on_tab2_autonum_mode_changed)
+        point_info_panel.bind("delete_point_clicked", self._on_delete_selected_point)
 
         layout.addWidget(self.group_point_info)
         layout.addWidget(UIStyleHelper.build_separator(container))
 
         # =============================================================
-        # Panel 2: 属性パネル (T-0032 order: 属性→出土形態→遺構名→
-        # (作成・カラーの行)→対象図面→(既設点編集時のみ)属性変更ボタン)
+        # Panel 2: 属性パネル (CoreUI)
         # =============================================================
-        self.group_attribute_panel = QGroupBox(container)
-        attr_layout = QVBoxLayout(self.group_attribute_panel)
-        attr_layout.setContentsMargins(0, 0, 0, 0)
-        attr_layout.setSpacing(UIConfig.PANEL_MARGIN)
+        attr_panel = CoreUIBuilder.build(TAB2_ATTRIBUTE_SPEC, parent=container)
+        self.group_attribute_panel = attr_panel.widget
+        
+        self.combo_attribute = attr_panel.get("attribute_code")
+        self.combo_excavation_type = attr_panel.get("excavation_type")
+        self.combo_feature_name = attr_panel.get("feature_name")
+        self.row_feature_selector = attr_panel.get_row("feature_name")
+        self.row_feature_actions = attr_panel.get_row("feature_actions")
+        self.btn_manage_feature = attr_panel.get("manage_feature")
+        self.btn_create_feature = self.btn_manage_feature  # 互換用エイリアス
 
-        # 属性 (T-0032: display-only labels "S:石器"/"P:土器"/"C:炭化物"/"SP";
-        # the raw AttributeType value is stored as itemData and must be read
-        # via _get_attribute_value()/set via _set_attribute_value()).
-        self.lbl_attribute = QLabel(UILabels.ATTRIBUTE_CODE, self.group_attribute_panel)
-        self.combo_attribute = QComboBox(self.group_attribute_panel)
+        attr_panel.bind("category_changed", self._on_category_changed)
+        attr_panel.bind("excavation_type_changed", self._on_excavation_type_changed)
+        attr_panel.bind("feature_combo_changed", self._on_feature_combo_changed)
+        attr_panel.bind("manage_feature_clicked", self._on_manage_feature_clicked)
+
+        # リスト初期化（初期化時のシグナル発火を防ぐ）
+        self.combo_attribute.blockSignals(True)
         for value in UILabels.ATTRIBUTE_OPTIONS:
             self.combo_attribute.addItem(UILabels.ATTRIBUTE_DISPLAY_MAP.get(value, value), value)
-        self.combo_attribute.currentIndexChanged.connect(self._on_category_changed)
-        row_attribute = UIStyleHelper.build_flex_row(
-            self.lbl_attribute,
-            [(self.combo_attribute, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        attr_layout.addWidget(row_attribute)
-
-        # 出土形態
-        self.lbl_excavation_type = QLabel(UILabels.EXCAVATION_TYPE, self.group_attribute_panel)
-        self.combo_excavation_type = QComboBox(self.group_attribute_panel)
+        self.combo_attribute.blockSignals(False)
+        
+        self.combo_excavation_type.blockSignals(True)
         self.combo_excavation_type.addItems(UILabels.EXCAVATION_OPTIONS)
-        self.combo_excavation_type.currentIndexChanged.connect(self._on_excavation_type_changed)
-        row_excavation = UIStyleHelper.build_flex_row(
-            self.lbl_excavation_type,
-            [(self.combo_excavation_type, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        attr_layout.addWidget(row_excavation)
-
-        # 遺構名 (selector only; 遺構管理ボタンは別行に配置, see row_feature_actions).
-        self.lbl_feature_selector = QLabel(UILabels.FEATURE_SELECTOR, self.group_attribute_panel)
-        self.combo_feature_name = QComboBox(self.group_attribute_panel)
+        self.combo_excavation_type.blockSignals(False)
+        
+        self.combo_feature_name.blockSignals(True)
         self.combo_feature_name.addItem(UILabels.UNREGISTERED)
-        self.combo_feature_name.currentTextChanged.connect(self._on_feature_combo_changed)
-
-        self.row_feature_selector = UIStyleHelper.build_flex_row(
-            self.lbl_feature_selector,
-            [(self.combo_feature_name, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        attr_layout.addWidget(self.row_feature_selector)
-
-        # 遺構管理ボタン (FEAT-01: color picker moved to dialog, create button renamed to manage)
-        self.row_feature_actions = QWidget(self.group_attribute_panel)
-        feature_actions_layout = QHBoxLayout(self.row_feature_actions)
-        feature_actions_layout.setContentsMargins(0, 0, 0, 0)
-        feature_actions_layout.setSpacing(8)
-
-        self.btn_manage_feature = QPushButton(UILabels.FEATURE_MANAGE, self.row_feature_actions)
-        self.btn_manage_feature.clicked.connect(self._on_manage_feature_clicked)
-        feature_actions_layout.addWidget(self.btn_manage_feature, 1)
-        self.btn_create_feature = self.btn_manage_feature
-
-        attr_layout.addWidget(self.row_feature_actions)
-
-
-        # Initial visibility for feature-specific controls (default is グリッド)
-        self.row_feature_selector.hide()
-
-        # T-0038: the former 属性変更 confirm button (btn_update_attribute)
-        # is retired now that 出土形態/遺構名/属性記号 changes commit in real
-        # time while an existing point is selected (see combo_attribute's
-        # extra currentIndexChanged connection above, and
-        # _on_excavation_type_changed/_on_feature_combo_changed below, all of
-        # which call _commit_attribute_fields_if_editing).
+        self.combo_feature_name.blockSignals(False)
 
         layout.addWidget(self.group_attribute_panel)
         layout.addWidget(UIStyleHelper.build_separator(container))
 
         # =============================================================
-        # Panel 3: 表示設定パネル (フォーカスモード + 基準点表示 + 図面選択リスト)
+        # Panel 3: 表示設定パネル (CoreUI)
         # =============================================================
-        self.group_display = QGroupBox(container)
+        display_panel = CoreUIBuilder.build(TAB2_DISPLAY_FILTER_SPEC, parent=container)
+        self.group_display = display_panel.widget
         self.group_focus = self.group_display
         self.group_drawing_list = self.group_display
-        display_layout = QVBoxLayout(self.group_display)
-        display_layout.setContentsMargins(0, 0, 0, 0)
-        display_layout.setSpacing(UIConfig.PANEL_MARGIN)
-
-        # Filter toggle button and settings button row
-        filter_btn_row = QWidget(self.group_display)
-        filter_btn_layout = QHBoxLayout(filter_btn_row)
-        filter_btn_layout.setContentsMargins(0, 0, 0, 0)
-        filter_btn_layout.setSpacing(6)
-
-        self.btn_filter = QPushButton(UILabels.BTN_FILTER_OFF, filter_btn_row)
+        
+        self.btn_filter = display_panel.get("filter_toggle")
         self.btn_filter.setCheckable(True)
-        self.btn_filter.toggled.connect(self._on_focus_mode_toggled)
-        self.btn_focus_mode = self.btn_filter  # Compatibility alias
-
-        self.btn_filter_settings = QPushButton(UILabels.BTN_FILTER_SETTINGS, filter_btn_row)
-        self.btn_filter_settings.clicked.connect(self._on_filter_settings_clicked)
-
-        filter_btn_layout.addWidget(self.btn_filter, 3)
-        filter_btn_layout.addWidget(self.btn_filter_settings, 1)
-        display_layout.addWidget(filter_btn_row)
-
-        self._current_display_filters: Dict[str, Any] = {
-            "attributes": [
-                AttributeType.S.value,
-                AttributeType.P.value,
-                AttributeType.C.value,
-                AttributeType.SP.value,
-            ],
-            "excavation_types": [
-                ExcavationType.FEATURE.value,
-                ExcavationType.GRID.value,
-            ],
-            "feature_names": [],
-            "target_drawing": UILabels.FILTER_DRAWING_SELECTED,
-        }
-
-        # 基準点レイヤ(プロジェクト共通・図面ごとではない)の表示/非表示を
-        # 切り替えるラジオボタン行。
-        self.lbl_ref_point_visibility = QLabel(UILabels.LBL_REF_POINT_VISIBILITY, self.group_display)
-        self.radio_ref_point_visible = QRadioButton(UILabels.RADIO_VISIBLE, self.group_display)
-        self.radio_ref_point_hidden = QRadioButton(UILabels.RADIO_HIDDEN, self.group_display)
-        self.ref_point_visibility_group = QButtonGroup(self.group_display)
-        self.ref_point_visibility_group.addButton(self.radio_ref_point_visible)
-        self.ref_point_visibility_group.addButton(self.radio_ref_point_hidden)
-        self._sync_ref_point_visibility_radios()
+        self.btn_focus_mode = self.btn_filter
+        self.btn_filter_settings = display_panel.get("filter_settings")
+        
+        radios = display_panel.get_buttons("ref_point_visibility")
+        self.radio_ref_point_visible = radios[0]
+        self.radio_ref_point_hidden = radios[1]
         self.radio_ref_point_visible.toggled.connect(self._on_ref_point_visibility_radio_toggled)
-        row_ref_point_visibility = UIStyleHelper.build_flex_row(
-            self.lbl_ref_point_visibility,
-            [(self.radio_ref_point_visible, 1), (self.radio_ref_point_hidden, 1), (None, 1)],
-            main_ratio=MAIN_RATIO,
-            row_height=UIConfig.ROW_HEIGHT,
-        )
-        display_layout.addWidget(row_ref_point_visibility)
 
-        self.table_drawing_list = QTableWidget(self.group_display)
-        self.table_drawing_list.setColumnCount(2)
-        self.table_drawing_list.setHorizontalHeaderLabels(["表示", "レイヤ名"])
-        self.table_drawing_list.setFixedHeight(UIConfig.DRAWING_LIST_HEIGHT)
+        self.table_drawing_list = display_panel.get("drawing_list_table")
         self.table_drawing_list.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_drawing_list.setSelectionMode(QTableWidget.SingleSelection)
         self.table_drawing_list.setFocusPolicy(Qt.NoFocus)
@@ -471,27 +292,29 @@ class Tab2DigitizingMixin:
         header.setStretchLastSection(True)
         header.resizeSection(0, 40)
         self.table_drawing_list.setColumnWidth(0, 40)
-        self.table_drawing_list.itemChanged.connect(self._on_table_cell_changed)
+        
         self.table_drawing_list.itemSelectionChanged.connect(self._on_table_selection_changed)
         header.sectionClicked.connect(self._on_header_clicked)
-        display_layout.addWidget(self.table_drawing_list)
+        self.table_drawing_list.itemChanged.connect(self._on_table_cell_changed)
+        
+        display_panel.bind("filter_toggled", self._on_focus_mode_toggled)
+        display_panel.bind("filter_settings_clicked", self._on_filter_settings_clicked)
+        
+        self.tab2_state.current_display_filters = {
+            "attributes": [AttributeType.S.value, AttributeType.P.value, AttributeType.C.value, AttributeType.SP.value],
+            "excavation_types": [ExcavationType.FEATURE.value, ExcavationType.GRID.value],
+            "feature_names": [],
+            "target_drawing": UILabels.FILTER_DRAWING_SELECTED,
+        }
 
         layout.addWidget(self.group_display)
         layout.addStretch()
 
         scroll.setWidget(container)
 
-        # T-0032: initialize 点情報パネル error-tracking flag; the summary
-        # panel itself already defaults to status_type="info" (新規点作成)
-        # via create_status_panel() above.
-        self._point_info_has_error = False
-
-        # T-0033: sync 作成/カラー button enabled state (and the color
-        # picker's gray-when-disabled styling) with the default 出土形態
-        # selection (グリッド), since neither combo emits its
-        # currentIndexChanged signal for the initial index-(-1)->0 transition
-        # performed by addItems() above.
+        self.tab2_state.point_info_has_error = False
         self._update_feature_related_visibility()
+        self._sync_ref_point_visibility_radios()
 
         return scroll
 
@@ -867,7 +690,7 @@ class Tab2DigitizingMixin:
         :return: Dict with filter criteria ('attributes', 'excavation_types', 'feature_names', 'drawing_name', 'target_drawing').
         :rtype: Dict[str, Any]
         """
-        filters = getattr(self, "_current_display_filters", None)
+        filters = self.tab2_state.current_display_filters
         if not filters:
             feature_names = []
             if hasattr(self, "feature_colors") and self.feature_colors:
@@ -886,7 +709,7 @@ class Tab2DigitizingMixin:
                 "feature_names": feature_names,
                 "target_drawing": UILabels.FILTER_DRAWING_SELECTED,
             }
-            self._current_display_filters = filters
+            self.tab2_state.current_display_filters = filters
 
         target_drawing_setting = filters.get("target_drawing", UILabels.FILTER_DRAWING_SELECTED)
 
@@ -948,7 +771,7 @@ class Tab2DigitizingMixin:
         elif hasattr(self, "layer_manager") and getattr(self.layer_manager, "feature_colors", None):
             feature_names = sorted(list(self.layer_manager.feature_colors.keys()))
 
-        current = dict(getattr(self, "_current_display_filters", {}))
+        current = dict(self.tab2_state.current_display_filters)
         # If feature_names in filters is empty but we have registered features, default to all features
         if not current.get("feature_names") and feature_names:
             current["feature_names"] = list(feature_names)
@@ -959,7 +782,7 @@ class Tab2DigitizingMixin:
             initial_filters=current,
         )
         if dlg.exec_() == QDialog.Accepted:
-            self._current_display_filters = dlg.get_filters()
+            self.tab2_state.current_display_filters = dlg.get_filters()
             self._push_focus_state_to_tool()
             if self.is_focus_mode_active():
                 self.update_symbology_opacity()
@@ -973,7 +796,7 @@ class Tab2DigitizingMixin:
         _on_excavation_type_changed / _on_feature_combo_changed below, both
         of which delegate here).
 
-        T-0032: while an existing point is selected (self.selected_edit_point_id
+        T-0032: while an existing point is selected (self.tab2_state.selected_edit_point_id
         is not None), auto-numbering (_apply_next_point_number) is skipped so
         that changing 出土形態/遺構名/属性 while editing an existing point does
         not clobber its point_name/branch_no; only the SP<->QSpinBox widget
@@ -987,9 +810,9 @@ class Tab2DigitizingMixin:
         if current_drawing and current_drawing != UILabels.DRAWING_UNSPECIFIED:
             self._ensure_drawing_visible(current_drawing)
 
-        self._is_out_of_bounds = False
+        self.tab2_state.is_out_of_bounds = False
 
-        if getattr(self, "selected_edit_point_id", None) is not None:
+        if self.tab2_state.selected_edit_point_id is not None:
             self._update_point_name_widget_visibility()
         else:
             self._apply_next_point_number()
@@ -1053,7 +876,7 @@ class Tab2DigitizingMixin:
             self.point_layer,
             "feature_name",
             leading_item=UILabels.UNREGISTERED,
-            target_list=self.feature_name_list,
+            target_list=self.tab2_state.feature_name_list,
         )
 
     def register_new_feature_name(self, new_name: str) -> str:
@@ -1064,7 +887,7 @@ class Tab2DigitizingMixin:
             self.combo_feature_name.setCurrentIndex(idx)
         else:
             self.combo_feature_name.addItem(clean_name)
-            self.feature_name_list.append(clean_name)
+            self.tab2_state.feature_name_list.append(clean_name)
             self.combo_feature_name.setCurrentText(clean_name)
         return clean_name
 
@@ -1098,17 +921,17 @@ class Tab2DigitizingMixin:
         self.point_layer.commitChanges()
 
         # Defensively suppress real-time commit signals during UI updates
-        prev_suppress = getattr(self, "_suppress_realtime_commit", False)
-        self._suppress_realtime_commit = True
+        prev_suppress = self.tab2_state.suppress_realtime_commit
+        self.tab2_state.suppress_realtime_commit = True
         self.combo_feature_name.blockSignals(True)
         try:
             # Update feature_name_list
             if hasattr(self, "feature_name_list"):
-                if old_name in self.feature_name_list:
-                    idx = self.feature_name_list.index(old_name)
-                    self.feature_name_list[idx] = new_name
-                elif new_name not in self.feature_name_list:
-                    self.feature_name_list.append(new_name)
+                if old_name in self.tab2_state.feature_name_list:
+                    idx = self.tab2_state.feature_name_list.index(old_name)
+                    self.tab2_state.feature_name_list[idx] = new_name
+                elif new_name not in self.tab2_state.feature_name_list:
+                    self.tab2_state.feature_name_list.append(new_name)
 
             # Update combo box items
             cur_text = self.combo_feature_name.currentText()
@@ -1126,10 +949,10 @@ class Tab2DigitizingMixin:
                     self.combo_feature_name.setCurrentIndex(new_idx)
 
             if self.combo_feature_name.currentText() == new_name:
-                self.current_feature_color = QColor(new_color)
+                self.tab2_state.current_feature_color = QColor(new_color)
         finally:
             self.combo_feature_name.blockSignals(False)
-            self._suppress_realtime_commit = prev_suppress
+            self.tab2_state.suppress_realtime_commit = prev_suppress
 
         self._update_point_info_status()
 
@@ -1169,7 +992,7 @@ class Tab2DigitizingMixin:
             new_name = dlg.result_text.strip()
             if new_name:
                 if hasattr(dlg, "result_color") and dlg.result_color:
-                    self.current_feature_color = QColor(dlg.result_color)
+                    self.tab2_state.current_feature_color = QColor(dlg.result_color)
                 self.register_new_feature_name(new_name)
 
     _on_create_feature_clicked = _on_manage_feature_clicked
@@ -1178,7 +1001,7 @@ class Tab2DigitizingMixin:
         """Reflect current feature color on the picker button."""
         if hasattr(self, "btn_color_picker") and self.btn_color_picker is not None:
             if self.btn_color_picker.isEnabled():
-                color_hex = self.current_feature_color.name()
+                color_hex = self.tab2_state.current_feature_color.name()
             else:
                 color_hex = "#9E9E9E"
             self.btn_color_picker.setStyleSheet(
@@ -1194,10 +1017,10 @@ class Tab2DigitizingMixin:
         "グループ一括適用" (btn_apply_color) confirmation step.
         """
         color = QColorDialog.getColor(
-            self.current_feature_color, self, UIDialogTitles.COLOR_PICKER
+            self.tab2_state.current_feature_color, self, UIDialogTitles.COLOR_PICKER
         )
         if color.isValid():
-            self.current_feature_color = color
+            self.tab2_state.current_feature_color = color
             self._update_color_picker_button()
             self._apply_feature_color_group()
 
@@ -1215,7 +1038,7 @@ class Tab2DigitizingMixin:
             )
             return
 
-        color_hex = self.current_feature_color.name()
+        color_hex = self.tab2_state.current_feature_color.name()
         field_idx = self.point_layer.fields().indexFromName("color_code")
 
         updated_count = 0
@@ -1279,7 +1102,7 @@ class Tab2DigitizingMixin:
             "drawing_name": d_name,
             "excavation_type": ex_type,
             "feature_name": feat_name,
-            "color_code": self.current_feature_color.name(),
+            "color_code": self.tab2_state.current_feature_color.name(),
             "attribute_type": attr_type,
             "point_name": pname,
             "branch_no": branch,
@@ -1345,7 +1168,7 @@ class Tab2DigitizingMixin:
         else:
             self.tab2_autonum_buttons[0].setEnabled(True)
             self.tab2_autonum_buttons[1].setEnabled(True)
-            is_editing_existing = getattr(self, "selected_edit_point_id", None) is not None
+            is_editing_existing = self.tab2_state.selected_edit_point_id is not None
             if (
                 was_forced_by_sp
                 and not is_editing_existing
@@ -1365,8 +1188,8 @@ class Tab2DigitizingMixin:
         :param index: 0 for 自動連番, 1 for 解除.
         :type index: int
         """
-        self.tab2_autonum_mode = "auto" if index == 0 else "release"
-        if self.tab2_autonum_mode == "auto" and not self._is_sp_attribute():
+        self.tab2_state.autonum_mode = "auto" if index == 0 else "release"
+        if self.tab2_state.autonum_mode == "auto" and not self._is_sp_attribute():
             self.edit_point_name.setValue(self._get_next_point_number())
             self._refresh_point_info_labels()
 
@@ -1378,15 +1201,15 @@ class Tab2DigitizingMixin:
         canvas click routing (which of _on_canvas_clicked /
         _on_existing_point_selected fires) is driven by
         CanvasDigitizingTool._handle_digitize_click reading
-        self.tab2_current_mode directly (T-0037); this method itself only
+        self.tab2_state.current_mode directly (T-0037); this method itself only
         updates the mode flag and the panel's visible button area.
 
         :param index: 0 for 新規, 1 for 編集.
         :type index: int
         """
-        self.tab2_current_mode = "new" if index == 0 else "edit"
-        self._is_out_of_bounds = False
-        is_new = (self.tab2_current_mode == "new")
+        self.tab2_state.current_mode = "new" if index == 0 else "edit"
+        self.tab2_state.is_out_of_bounds = False
+        is_new = (self.tab2_state.current_mode == "new")
         if hasattr(self, "widget_new_mode_actions"):
             self.widget_new_mode_actions.setVisible(is_new)
         if hasattr(self, "widget_edit_mode_actions"):
@@ -1404,7 +1227,7 @@ class Tab2DigitizingMixin:
         # selection state via the existing _reset_point_selection() (same
         # helper _on_blank_click_in_edit_mode() uses) so the point-name is
         # recalculated and the exclusion is dropped.
-        if self.tab2_current_mode == "new" and getattr(self, "selected_edit_point_id", None) is not None:
+        if self.tab2_state.current_mode == "new" and self.tab2_state.selected_edit_point_id is not None:
             self._reset_point_selection()
 
     def _get_next_point_number(self) -> int:
@@ -1493,7 +1316,7 @@ class Tab2DigitizingMixin:
             pname,
             branch,
             drawing_name,
-            exclude_feature_id=getattr(self, "selected_edit_point_id", None),
+            exclude_feature_id=self.tab2_state.selected_edit_point_id,
         )
         if not is_dup:
             return None
@@ -1561,7 +1384,7 @@ class Tab2DigitizingMixin:
         :return: True if out of bounds (or missing affine params), False otherwise.
         :rtype: bool
         """
-        if getattr(self, "selected_edit_point_id", None) is None:
+        if self.tab2_state.selected_edit_point_id is None:
             return False
         if not self.point_layer or not self.point_layer.isValid():
             return False
@@ -1574,7 +1397,7 @@ class Tab2DigitizingMixin:
         if not drawing_name or drawing_name == UILabels.DRAWING_UNSPECIFIED:
             return False
 
-        feat = self.point_layer.getFeature(self.selected_edit_point_id)
+        feat = self.point_layer.getFeature(self.tab2_state.selected_edit_point_id)
         if not feat.isValid() or not feat.hasGeometry():
             return False
 
@@ -1588,14 +1411,14 @@ class Tab2DigitizingMixin:
         Combines the status line (新規点作成/既設点編集/エラー, no longer given
         a dedicated banner style) with the 出土形態/点名+枝番/XY座標 summary
         lines computed by _refresh_point_info_labels (stored on
-        self._point_info_summary), in the same order used since T-0032.
+        self.tab2_state.point_info_summary), in the same order used since T-0032.
 
         :param status_text: Current status line text.
         :type status_text: str
         :return: Newline-joined 4-line summary text.
         :rtype: str
         """
-        summary = getattr(self, "_point_info_summary", None) or {}
+        summary = self.tab2_state.point_info_summary or {}
         return "\n".join(
             [
                 status_text,
@@ -1616,11 +1439,11 @@ class Tab2DigitizingMixin:
             UIStyleHelper.set_error_border(self.combo_feature_name, self._is_feature_name_missing())
 
         if hasattr(self, "combo_drawing_name"):
-            is_editing = getattr(self, "selected_edit_point_id", None) is not None
+            is_editing = self.tab2_state.selected_edit_point_id is not None
             is_oob = (
                 self._check_realtime_out_of_bounds()
                 if is_editing
-                else getattr(self, "_is_out_of_bounds", False)
+                else self.tab2_state.is_out_of_bounds
             )
             UIStyleHelper.set_error_border(self.combo_drawing_name, is_oob)
 
@@ -1639,7 +1462,7 @@ class Tab2DigitizingMixin:
         (新規点作成=info/blue / 既設点編集=warning/orange -- reusing
         QFrame[statusType="warning"] since no dedicated "editing" style is
         defined). Refreshes the per-field red error borders (see
-        _update_error_borders, T-0033) and sets self._point_info_has_error,
+        _update_error_borders, T-0033) and sets self.tab2_state.point_info_has_error,
         which _commit_point_identity_if_editing/_commit_attribute_fields_if_editing
         (T-0038) consult to skip committing to the selected feature while an
         error is active (replacing the former btn_rename_point/
@@ -1648,30 +1471,30 @@ class Tab2DigitizingMixin:
         if not hasattr(self, "lbl_point_info_status"):
             return
 
-        is_editing = getattr(self, "selected_edit_point_id", None) is not None
+        is_editing = self.tab2_state.selected_edit_point_id is not None
         tooltip = ""
 
         if self._is_feature_name_missing():
             status_type = "error"
             text = UILabels.STATUS_ERR_FEATURE_REQUIRED
-            self._point_info_has_error = True
+            self.tab2_state.point_info_has_error = True
         elif is_editing and self._check_realtime_out_of_bounds():
             status_type = "error"
             text = UILabels.STATUS_ERR_OUT_OF_BOUNDS
-            self._point_info_has_error = True
-        elif not is_editing and getattr(self, "_is_out_of_bounds", False):
+            self.tab2_state.point_info_has_error = True
+        elif not is_editing and self.tab2_state.is_out_of_bounds:
             status_type = "error"
             text = UILabels.STATUS_ERR_OUT_OF_BOUNDS
-            self._point_info_has_error = True
+            self.tab2_state.point_info_has_error = True
         else:
             dup_ident = self._check_realtime_duplicate()
             if dup_ident:
                 status_type = "error"
                 text = UILabels.STATUS_ERR_DUPLICATE
                 tooltip = dup_ident
-                self._point_info_has_error = True
+                self.tab2_state.point_info_has_error = True
             else:
-                self._point_info_has_error = False
+                self.tab2_state.point_info_has_error = False
                 if is_editing:
                     status_type, text = "warning", UILabels.STATUS_EDIT_POINT
                 else:
@@ -1694,7 +1517,7 @@ class Tab2DigitizingMixin:
 
         Callers are responsible for validating the values beforehand (see
         _commit_point_identity_if_editing/_commit_attribute_fields_if_editing,
-        which both consult self._point_info_has_error before calling this);
+        which both consult self.tab2_state.point_info_has_error before calling this);
         this method performs no validation itself and always attempts the
         write once called.
 
@@ -1704,7 +1527,7 @@ class Tab2DigitizingMixin:
             selected and point_layer is available), False otherwise.
         :rtype: bool
         """
-        if self.selected_edit_point_id is None or not self.point_layer:
+        if self.tab2_state.selected_edit_point_id is None or not self.point_layer:
             return False
 
         with (self.busy_interaction_guard() if hasattr(self, "busy_interaction_guard") else nullcontext()):
@@ -1713,11 +1536,11 @@ class Tab2DigitizingMixin:
             for field_name, value in updates.items():
                 if field_name in field_names:
                     idx = field_names.index(field_name)
-                    self.point_layer.changeAttributeValue(self.selected_edit_point_id, idx, value)
+                    self.point_layer.changeAttributeValue(self.tab2_state.selected_edit_point_id, idx, value)
             self.point_layer.commitChanges()
 
-            if self._selected_point_data is not None:
-                self._selected_point_data.update(updates)
+            if self.tab2_state.selected_point_data is not None:
+                self.tab2_state.selected_point_data.update(updates)
 
             if self.is_focus_mode_active():
                 self.update_symbology_opacity()
@@ -1743,11 +1566,11 @@ class Tab2DigitizingMixin:
             str for currentTextChanged).
         :type args: Any
         """
-        if getattr(self, "_suppress_realtime_commit", False):
+        if self.tab2_state.suppress_realtime_commit:
             return
-        if self.selected_edit_point_id is None or not self.point_layer:
+        if self.tab2_state.selected_edit_point_id is None or not self.point_layer:
             return
-        if getattr(self, "_point_info_has_error", False):
+        if self.tab2_state.point_info_has_error:
             return
 
         raw_drawing = (
@@ -1768,17 +1591,17 @@ class Tab2DigitizingMixin:
             "drawing_name": drawing_name,
             "excavation_type": ex_type,
             "feature_name": feat_name if is_feature else "",
-            "color_code": self.current_feature_color.name() if is_feature else "",
+            "color_code": self.tab2_state.current_feature_color.name() if is_feature else "",
             "attribute_type": attr_value,
         }
 
         # 新旧で図面が変化した場合のみ、_validate_drawing_bounds でピクセル座標を再計算し updates["pixel_x"] と pixel_y を更新する
         old_drawing_name = ""
-        if self._selected_point_data is not None:
-            old_drawing_name = str(self._selected_point_data.get("drawing_name") or "").strip()
+        if self.tab2_state.selected_point_data is not None:
+            old_drawing_name = str(self.tab2_state.selected_point_data.get("drawing_name") or "").strip()
 
         if drawing_name != old_drawing_name:
-            feat = self.point_layer.getFeature(self.selected_edit_point_id)
+            feat = self.point_layer.getFeature(self.tab2_state.selected_edit_point_id)
             if feat.isValid() and feat.hasGeometry():
                 map_point = feat.geometry().asPoint()
                 is_valid, px_coords = self._validate_drawing_bounds(drawing_name, map_point)
@@ -1790,7 +1613,7 @@ class Tab2DigitizingMixin:
                     updates["pixel_y"] = px_coords[1]
 
         if self._commit_fields_to_feature(updates):
-            self._refresh_point_info_labels(override=self._selected_point_data)
+            self._refresh_point_info_labels(override=self.tab2_state.selected_point_data)
             self._update_point_info_status()
 
     def _on_point_identity_changed(self, *args: Any) -> None:
@@ -1804,7 +1627,7 @@ class Tab2DigitizingMixin:
 
     def _refresh_point_info_labels(self, override: Optional[Dict[str, Any]] = None) -> None:
         """Recompute the 出土形態/点名+枝番/XY座標 summary lines for 点情報パネル
-        (T-0027/T-0032; T-0033: stored on self._point_info_summary and
+        (T-0027/T-0032; T-0033: stored on self.tab2_state.point_info_summary and
         rendered into the flat multi-line panel text by
         _update_point_info_status/_build_point_info_text rather than being
         set directly on now-removed per-line QLabels).
@@ -1851,7 +1674,7 @@ class Tab2DigitizingMixin:
             coords_text = "-"
 
         pn_display = f"{pname} {branch}".strip() if pname else ""
-        self._point_info_summary = {
+        self.tab2_state.point_info_summary = {
             "group": group_label or "-",
             "pointname": pn_display or "-",
             "coords": coords_text,
@@ -1874,7 +1697,7 @@ class Tab2DigitizingMixin:
         self._update_point_name_widget_visibility()
         if self._is_sp_attribute():
             self.edit_point_name_sp.clear()
-        elif getattr(self, "tab2_autonum_mode", "auto") == "auto":
+        elif self.tab2_state.autonum_mode == "auto":
             next_num = self._get_next_point_number()
             self.edit_point_name.setValue(next_num)
         self._refresh_point_info_labels()
@@ -1882,9 +1705,9 @@ class Tab2DigitizingMixin:
     @pyqtSlot(str)
     def _on_branch_text_changed(self, text: str) -> None:
         """Handle branch number cleared to increment point number if previously digitized with branch."""
-        if not text.strip() and self._has_digitized_with_branch:
+        if not text.strip() and self.tab2_state.has_digitized_with_branch:
             self._apply_next_point_number()
-            self._has_digitized_with_branch = False
+            self.tab2_state.has_digitized_with_branch = False
         self._on_point_identity_changed()
 
     def _on_canvas_clicked(self, map_point: QgsPointXY) -> None:
@@ -1925,7 +1748,7 @@ class Tab2DigitizingMixin:
         if not self.point_layer or not self.point_layer.isValid():
             return
 
-        if getattr(self, "tab2_autonum_mode", "auto") == "release":
+        if self.tab2_state.autonum_mode == "release":
             self._handle_release_mode_click(map_point)
             return
 
@@ -1944,10 +1767,10 @@ class Tab2DigitizingMixin:
         drawing_name = state.get("drawing_name", "")
         is_valid, _ = self._validate_drawing_bounds(drawing_name, map_point)
         if not is_valid:
-            self._is_out_of_bounds = True
+            self.tab2_state.is_out_of_bounds = True
             self._update_point_info_status()
             return
-        self._is_out_of_bounds = False
+        self.tab2_state.is_out_of_bounds = False
 
         self._create_digitized_point_from_state(state, map_point)
 
@@ -1979,10 +1802,10 @@ class Tab2DigitizingMixin:
         # Spatial validation for drawing bounds
         is_valid, _ = self._validate_drawing_bounds(drawing_name, map_point)
         if not is_valid:
-            self._is_out_of_bounds = True
+            self.tab2_state.is_out_of_bounds = True
             self._update_point_info_status()
             return
-        self._is_out_of_bounds = False
+        self.tab2_state.is_out_of_bounds = False
 
         excavation_type = self.combo_excavation_type.currentText()
         feature_name = self.combo_feature_name.currentText()
@@ -2012,7 +1835,7 @@ class Tab2DigitizingMixin:
             "drawing_name": drawing_name,
             "excavation_type": excavation_type,
             "feature_name": feature_name,
-            "color_code": self.current_feature_color.name(),
+            "color_code": self.tab2_state.current_feature_color.name(),
             "attribute_type": self._get_attribute_value(),
             "point_name": point_name,
             "branch_no": branch_no,
@@ -2171,9 +1994,9 @@ class Tab2DigitizingMixin:
         """
         branch_no = data.get("branch_no", "")
         if branch_no:
-            self._has_digitized_with_branch = True
+            self.tab2_state.has_digitized_with_branch = True
         else:
-            self._has_digitized_with_branch = False
+            self.tab2_state.has_digitized_with_branch = False
             self._apply_next_point_number()
         self._refresh_point_info_labels()
         self._update_point_info_status()
@@ -2221,7 +2044,7 @@ class Tab2DigitizingMixin:
             
         if result == QDialog.Accepted:
             if dialog.dialog_action == "delete":
-                self.selected_edit_point_id = data.get("feature_id")
+                self.tab2_state.selected_edit_point_id = data.get("feature_id")
                 self._on_delete_selected_point()
             elif dialog.dialog_action == "confirm" and self.point_layer:
                 fid = data.get("feature_id")
@@ -2261,23 +2084,28 @@ class Tab2DigitizingMixin:
         every existing feature (snap detection failed). This clears the
         current selection (form reverts to new-point-creation display,
         selection marker cleared) via _reset_point_selection(), while
-        leaving self.tab2_current_mode ("edit") untouched — only the
+        leaving self.tab2_state.current_mode ("edit") untouched — only the
         mode-change handler (_on_tab2_mode_changed) may alter the mode.
         """
-        if self.selected_edit_point_id is None:
+        if self.tab2_state.selected_edit_point_id is None:
             return
         self._reset_point_selection()
 
     def _reset_point_selection(self) -> None:
         """Reset form back to new point creation mode."""
-        self.selected_edit_point_id = None
-        self._selected_point_data = None
+        # 1. 状態のリセット処理を Tab2State に委譲
+        self.tab2_state.reset_selection()
+        
+        # --- 【デバッグ用コード】状態の一括確認 ---
+        # QGISのPythonコンソールに現在のStateの全プロパティを出力します
+        # dataclassは自動的に見やすい文字列(repr)を生成してくれます
+        print("[DEBUG] Tab2State after reset:", self.tab2_state)
+        # ----------------------------------------
+        
+        # 2. UIのリセット処理はそのまま維持
         self._set_category_widgets_locked(False)
-        self._is_out_of_bounds = False
-
         self._apply_next_point_number()
         self.edit_branch_no.clear()
-        self._has_digitized_with_branch = False
         self._refresh_point_info_labels()
         self._update_point_info_status()
 
@@ -2291,12 +2119,12 @@ class Tab2DigitizingMixin:
         T-0027: deletion is now immediate (no confirmation dialog), replacing
         the former QMessageBox.question() confirmation step.
         """
-        if self.selected_edit_point_id is None or not self.point_layer:
+        if self.tab2_state.selected_edit_point_id is None or not self.point_layer:
             return
 
         with (self.busy_interaction_guard() if hasattr(self, "busy_interaction_guard") else nullcontext()):
             self.point_layer.startEditing()
-            self.point_layer.deleteFeature(self.selected_edit_point_id)
+            self.point_layer.deleteFeature(self.tab2_state.selected_edit_point_id)
             self.point_layer.commitChanges()
 
             self.iface.messageBar().pushMessage(

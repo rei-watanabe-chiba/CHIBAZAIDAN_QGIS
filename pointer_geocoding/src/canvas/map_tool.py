@@ -512,13 +512,13 @@ class CanvasDigitizingTool(QgsMapTool):
             return None
 
         # First try to find among valid_ids (focused)
-        if is_focus_active and valid_ids:
-            best = find_best(valid_ids)
-            if best is not None:
-                return best
-
-        # Fallback to all candidate_ids if not focused or no focused items found
-        return find_best(candidate_ids)
+        if is_focus_active:
+            # フィルターON時は、条件に合致した(valid_ids)フィーチャのみを対象とする
+            # （対象外フィーチャへのフォールバック検索は行わない）
+            return find_best(valid_ids)
+        else:
+            # フィルターOFF時は、周辺の全フィーチャ(candidate_ids)を対象とする
+            return find_best(candidate_ids)
 
     def find_nearest_feature(
         self, layer: QgsVectorLayer, map_point: QgsPointXY
@@ -575,7 +575,12 @@ class CanvasDigitizingTool(QgsMapTool):
                 self.hover_marker.hide()
             return
 
-        mode = getattr(self.dock_widget, "tab2_current_mode", "new")
+        mode = "new"
+        if self.dock_widget:
+            if hasattr(self.dock_widget, "tab2_state"):
+                mode = self.dock_widget.tab2_state.current_mode
+            else:
+                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
         if mode not in ("new", "edit"):
             mode = "new"
 
@@ -642,7 +647,12 @@ class CanvasDigitizingTool(QgsMapTool):
         if not self.dock_widget:
             return
 
-        mode = getattr(self.dock_widget, "tab2_current_mode", "new")
+        mode = "new"
+        if self.dock_widget:
+            if hasattr(self.dock_widget, "tab2_state"):
+                mode = self.dock_widget.tab2_state.current_mode
+            else:
+                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
         if mode not in ("new", "edit"):
             mode = "new"
 
