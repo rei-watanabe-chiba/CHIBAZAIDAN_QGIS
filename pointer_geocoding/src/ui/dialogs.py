@@ -35,11 +35,76 @@ from .style import UIStyleHelper
 from ..logic.core import ExcavationType, AttributeType
 from .constants import UIConfig, UILabels, UIMessages, UIPlaceholders, UIDialogSizes, UIDialogTitles
 from .core.builder import CoreUIBuilder
-from .schemas import (
-    GRID_INPUT_ACTIONS_SPEC, POINT_NAME_ENTRY_SPEC, POINT_NAME_ENTRY_ACTIONS_SPEC
-)
+from .core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
 from ..uilogic.dialogs_logic import GridInputLogic, PointNameEntryLogic, FeatureManageLogic
 
+# =========================================================================
+# CoreUI Schemas for Dialogs (Co-location)
+# =========================================================================
+
+GRID_INPUT_ACTIONS_SPEC = PanelSpec(
+    panel_id="grid_input_actions",
+    fields=[
+        FieldSpec(
+            field_id="dialog_actions",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=True,
+            buttons=[
+                ButtonDef(
+                    field_id="confirm",
+                    text=UILabels.BTN_CONFIRM,
+                    style_variant="primary",
+                    on_click="confirm_clicked",
+                    enabled=False,
+                ),
+                ButtonDef(field_id="cancel", text=UILabels.BTN_CANCEL, on_click="cancel_clicked"),
+            ],
+        ),
+    ],
+)
+
+POINT_NAME_ENTRY_SPEC = PanelSpec(
+    panel_id="point_name_entry",
+    fields=[
+        FieldSpec(
+            field_id="point_name",
+            widget_type=WidgetType.SPINBOX_ROW,
+            label=UILabels.POINT_NAME,
+            spin_min=1,
+            spin_max=999999,
+            spin_default=1,
+        ),
+        FieldSpec(
+            field_id="point_name_sp",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label=UILabels.POINT_NAME,
+            placeholder=UIPlaceholders.POINT_NAME_SP,
+        ),
+        FieldSpec(
+            field_id="branch_no",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label=UILabels.BRANCH_NO,
+            placeholder=UIPlaceholders.BRANCH_NO,
+        ),
+    ],
+)
+
+POINT_NAME_ENTRY_ACTIONS_SPEC = PanelSpec(
+    panel_id="point_name_entry_actions",
+    fields=[
+        FieldSpec(
+            field_id="dialog_actions",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=True,
+            buttons=[
+                ButtonDef(
+                    field_id="ok", text=UILabels.BTN_CONFIRM, style_variant="primary", on_click="ok_clicked"
+                ),
+                ButtonDef(field_id="cancel", text=UILabels.BTN_CANCEL, on_click="cancel_clicked"),
+            ],
+        ),
+    ],
+)
 
 class ModelessSectionDialog(QDialog):
     def __init__(self, title: str, content_widget: QWidget, on_show=None, on_close=None, parent=None, width=None, height=None):

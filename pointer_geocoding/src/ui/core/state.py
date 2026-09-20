@@ -1,16 +1,6 @@
-"""
-/***************************************************************************
- PointerGeocoding Plugin - UI State Management
- ***************************************************************************/
-
-Step 1: 単一状態ストア（UIStateStore）と一方向データフローアーキテクチャ。
-UIの表示状態やモードをグローバルに一元管理し、シグナルを用いたリアクティブな
-更新を可能にします。旧 tab2_state.py の状態もここに統合されています。
-"""
 from dataclasses import dataclass, field, replace
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from qgis.PyQt.QtCore import QObject, pyqtSignal
-
 
 @dataclass(frozen=True)
 class UIState:
@@ -24,6 +14,7 @@ class UIState:
     selected_point_id: Optional[int] = None
     selected_point_data: Optional[Dict[str, Any]] = None
     has_digitized_with_branch: bool = False
+    selected_drawing_name: str = ""  # ← 追加: 選択中の対象図面
     
     # 3. 制御フラグ
     suppress_realtime_commit: bool = False
@@ -40,14 +31,18 @@ class UIState:
     )
     
     # 5. 遺構カラー・リストキャッシュ
-    current_feature_color: str = "#FF5722"  # QColorではなくHEX文字列で状態管理
+    current_feature_color: str = "#FF5722"
     feature_name_list: List[str] = field(default_factory=list)
 
+    # 6. 画像管理 (Tab1) 状態 ← 追加
+    current_copied_image_path: Optional[str] = None
+    confirmed_layer_name: Optional[str] = None
+    calculated_affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
+    ref_points_data: List[Dict[str, Any]] = field(default_factory=list)
 
 class UIAction:
     """状態更新の意図を表現する基底クラス"""
     pass
-
 
 # ==========================================
 # モード・選択切り替え系 Action
@@ -72,6 +67,22 @@ class ChangeAutonumModeAction(UIAction):
 @dataclass
 class SetDigitizedWithBranchAction(UIAction):
     has_branch: bool
+
+@dataclass
+class SelectDrawingAction(UIAction):
+    """対象図面の選択状態を更新するAction"""
+    drawing_name: str
+
+# ==========================================
+# 画像管理 (Tab1) 系 Action
+# ==========================================
+@dataclass
+class SetGeorefStateAction(UIAction):
+    image_path: Optional[str] = None
+    layer_name: Optional[str] = None
+    affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
+    ref_points: Optional[List[Dict[str, Any]]] = None
+    clear_ref_points: bool = False
 
 # ==========================================
 # 表示制御・フィルター系 Action
@@ -112,14 +123,10 @@ class SetSuppressCommitAction(UIAction):
 
 @dataclass
 class ResetSelectionAction(UIAction):
-    """新規モード切替時などに呼ばれる「状態クリーンアップ」用のAction"""
     pass
 
 
 class UIStateStore(QObject):
-    """単一状態ストア: 状態の保持とActionのディスパッチ、差分通知を行う"""
-    
-    # 引数: (新しい状態: UIState, 変更された差分: Dict[str, Any])
     state_changed = pyqtSignal(object, dict)
 
     def __init__(self, parent: Optional[QObject] = None) -> None:
@@ -131,11 +138,9 @@ class UIStateStore(QObject):
         return self._state
 
     def dispatch_silent(self, action: UIAction) -> None:
-        """UIイベントの無限ループを防ぐためのサイレント更新（シグナルを発火しないディスパッチ）"""
         self._apply_action(action, emit_signal=False)
 
     def dispatch(self, action: UIAction) -> None:
-        """Actionを受け取り、新しい状態を生成して差分を通知する"""
         self._apply_action(action, emit_signal=True)
 
     def _apply_action(self, action: UIAction, emit_signal: bool = True) -> None:
@@ -153,6 +158,21 @@ class UIStateStore(QObject):
             new_state_kwargs['autonum_mode'] = action.mode
         elif isinstance(action, SetDigitizedWithBranchAction):
             new_state_kwargs['has_digitized_with_branch'] = action.has_branch
+        elif isinstance(action, SelectDrawingAction):
+            new_state_kwargs['selected_drawing_name'] = action.drawing_name
+            
+        # 画像管理 (Tab1) 系
+        elif isinstance(action, SetGeorefStateAction):
+            if action.image_path is not None:
+                new_state_kwargs['current_copied_image_path'] = action.image_path
+            if action.layer_name is not None:
+                new_state_kwargs['confirmed_layer_name'] = action.layer_name
+            if action.affine_params is not None:
+                new_state_kwargs['calculated_affine_params'] = action.affine_params
+            if action.ref_points is not None:
+                new_state_kwargs['ref_points_data'] = action.ref_points
+            elif action.clear_ref_points:
+                new_state_kwargs['ref_points_data'] = []
             
         # 表示制御・フィルター系
         elif isinstance(action, SetFocusModeAction):
@@ -190,11 +210,7 @@ class UIStateStore(QObject):
 
         new_state = replace(self._state, **new_state_kwargs)
         
-        # 差分（変更があったプロパティ）の抽出
-        diff = {}
-        for k, v in new_state_kwargs.items():
-            if getattr(self._state, k) != v:
-                diff[k] = v
+        diff = {k: v for k, v in new_state_kwargs.items() if getattr(self._state, k) != v}
                 
         if diff:
             self._state = new_state

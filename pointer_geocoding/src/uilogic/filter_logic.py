@@ -12,7 +12,7 @@ from qgis.core import QgsProject
 from qgis.PyQt.QtCore import QObject, Qt
 from qgis.PyQt.QtWidgets import QDialog
 
-from ..ui.core.state import UIStateStore, SetFocusModeAction
+from ..ui.core.state import UIStateStore, SetFocusModeAction, SetDisplayFiltersAction
 from ..ui.dialogs import DisplayFilterDialog
 
 
@@ -58,7 +58,9 @@ class FilterLogic(QObject):
             initial_filters=self.state_store.state.display_filters,
         )
         if dlg.exec_() == QDialog.Accepted:
-            # OKクリック時にフォーカスモードを強制ONにする
+            # 1. フィルター設定を更新
+            self.state_store.dispatch(SetDisplayFiltersAction(dlg.get_filters()))
+            # 2. OKクリック時にフォーカスモードを強制ONにする
             self.state_store.dispatch(SetFocusModeAction(True))
 
     def _on_ref_point_visibility_changed(self, idx: int) -> None:

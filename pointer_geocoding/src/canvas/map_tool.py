@@ -577,7 +577,9 @@ class CanvasDigitizingTool(QgsMapTool):
 
         mode = "new"
         if self.dock_widget:
-            if hasattr(self.dock_widget, "tab2_state"):
+            if hasattr(self.dock_widget, "state_store"):
+                mode = self.dock_widget.state_store.state.tab2_mode
+            elif hasattr(self.dock_widget, "tab2_state"):
                 mode = self.dock_widget.tab2_state.current_mode
             else:
                 mode = getattr(self.dock_widget, "tab2_current_mode", "new")
@@ -649,7 +651,9 @@ class CanvasDigitizingTool(QgsMapTool):
 
         mode = "new"
         if self.dock_widget:
-            if hasattr(self.dock_widget, "tab2_state"):
+            if hasattr(self.dock_widget, "state_store"):
+                mode = self.dock_widget.state_store.state.tab2_mode
+            elif hasattr(self.dock_widget, "tab2_state"):
                 mode = self.dock_widget.tab2_state.current_mode
             else:
                 mode = getattr(self.dock_widget, "tab2_current_mode", "new")

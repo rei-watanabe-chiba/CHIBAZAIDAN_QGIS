@@ -13,9 +13,7 @@ Event wiring is deferred: building a panel never touches the caller's
 business-logic methods directly. Instead, each field that declares an
 on_click/on_change hook name registers a "pending connector" closure; the
 caller later attaches its real callback via ``BuiltPanel.bind(hook_name,
-callback)``. This is what lets schemas.py stay a pure data file with zero
-references to Tab1GeorefMixin's methods.
-
+callback)``. 
 T-0045 追加スコープ: ``BuiltPanel`` also exposes ``get_value()``/
 ``set_value()``/``collect_values()`` for the value-bearing widget kinds
 (LINEEDIT_ROW/COMBOBOX_ROW/SEGMENTED_TOGGLE), so callers no longer need to

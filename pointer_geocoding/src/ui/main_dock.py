@@ -40,14 +40,15 @@ from ..canvas.map_tool import CanvasDigitizingTool, ImageGeorefTool
 from .style import UIStyleHelper
 from .constants import UIConfig, UILabels, UIMessages, UIDialogSizes, UIPlaceholders
 from .dialogs import ImageDialog, ModelessSectionDialog, DisplayFilterDialog, FeatureManageDialog
-from .tab1_image import Tab1GeorefMixin
-from .tab3_settings import Tab3SettingsMixin
+from .main_image import create_tab1_ui
+from .main_settings import create_tab3_ui
 
 # --- 新設・同元化する状態管理とUI基盤 ---
 from .core.state import (
     UIStateStore, ChangeTab2ModeAction, ChangeAutonumModeAction, 
     SetFocusModeAction, ResetSelectionAction, SetFeatureCacheAction,
-    SetPointInfoSummaryAction, SetDigitizedWithBranchAction, SetSuppressCommitAction
+    SetPointInfoSummaryAction, SetDigitizedWithBranchAction, SetSuppressCommitAction,
+    SelectDrawingAction
 )
 from .core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
 from .core.builder import CoreUIBuilder
@@ -121,7 +122,7 @@ TAB2_DISPLAY_FILTER_SPEC = PanelSpec(
 )
 
 
-class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
+class MainDockWidget(QDockWidget):
     
     INVALID_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
@@ -171,8 +172,6 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         self.map_tool.blank_click_in_edit_mode.connect(
             lambda: self.state_store.dispatch(ResetSelectionAction())
         )
-        
-        self.layer_manager.settings_changed.connect(self._on_layer_manager_settings_changed)
 
         self._init_ui()
         UIStyleHelper.apply_theme(self)
@@ -213,7 +212,8 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         self._init_tab2_comboboxes()
         self._restore_feature_names()
         self._update_drawing_combo()
-        self.update_settings_ui_from_dict()
+        if hasattr(self, "settings_logic"):
+            self.settings_logic.update_settings_ui_from_dict()
 
         project = QgsProject.instance()
         if project is not None:
@@ -237,6 +237,12 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
             pass
 
         self._update_main_map_tool_state()
+
+        # --- 追加: 起動時の連番復元とステータスUIの初期同期 ---
+        if self.point_layer and self.point_layer.isValid():
+            self._apply_next_point_number()
+            self._refresh_point_info_labels()
+            self._update_point_info_status_ui(self.state_store.state)
 
     @property
     def preview_canvas(self) -> Optional[QgsMapCanvas]:
@@ -298,14 +304,14 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         root_layout.addWidget(UIStyleHelper.build_separator(root_widget))
 
         # 2. 画像 dialog
-        self.tab1_container = self._create_tab1_ui()
+        self.tab1_container = create_tab1_ui(self)
         self.image_dialog = ImageDialog(
             self.tab1_container, on_show=self._update_main_map_tool_state,
             on_close=self._update_main_map_tool_state, parent=self,
         )
 
         # 3. 設定 dialog
-        self.tab3_container = self._create_tab3_ui()
+        self.tab3_container = create_tab3_ui(self)
         self.settings_dialog = ModelessSectionDialog(
             UILabels.TAB_3_TITLE, self.tab3_container,
             on_show=self._update_main_map_tool_state,
@@ -394,6 +400,10 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         header.resizeSection(0, 40)
         table_drawing_list.setColumnWidth(0, 40)
         
+        table_drawing_list.itemSelectionChanged.connect(self._on_drawing_table_selection_changed)
+        header.sectionClicked.connect(self._on_drawing_table_header_clicked)
+        table_drawing_list.itemChanged.connect(self._on_drawing_table_cell_changed)
+        
         layout.addWidget(self.panel_display.widget)
         layout.addStretch()
 
@@ -433,13 +443,37 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
             self.panel_point_info.get_row("branch_no").setEnabled(is_new)
             self.panel_attribute.widget.setEnabled(is_new)
 
+        # 誤って消えていた選択マーカーのクリア処理を復元
         if "selected_point_id" in diff and new_state.selected_point_id is None:
-            if self.map_tool:
+            if getattr(self, "map_tool", None):
                 self.map_tool.clear_selected_marker()
 
+        # 誤って消えていたフィルターボタンのUI同期処理を復元
         if "focus_active" in diff or "display_filters" in diff:
+            btn_filter = self.panel_display.get("filter_toggle")
+            if new_state.focus_active:
+                if not btn_filter.isChecked():
+                    btn_filter.blockSignals(True)
+                    btn_filter.setChecked(True)
+                    btn_filter.blockSignals(False)
+                btn_filter.setText(UILabels.BTN_FILTER_ON)
+                btn_filter.setStyleSheet("background-color: #1976D2; color: #FFFFFF; font-weight: bold; border-radius: 4px; padding: 4px;")
+            else:
+                if btn_filter.isChecked():
+                    btn_filter.blockSignals(True)
+                    btn_filter.setChecked(False)
+                    btn_filter.blockSignals(False)
+                btn_filter.setText(UILabels.BTN_FILTER_OFF)
+                btn_filter.setStyleSheet("")
+                
             self._push_focus_state_to_tool()
             self.update_symbology_opacity()
+
+        # 選択図面が変更された場合
+        if "selected_drawing_name" in diff:
+            if new_state.focus_active and new_state.display_filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
+                self._push_focus_state_to_tool()
+                self.update_symbology_opacity()
 
         if any(k in diff for k in ("point_info_summary", "point_info_has_error", "is_out_of_bounds", "status_message", "selected_point_id")):
             self._update_point_info_status_ui(new_state)
@@ -748,11 +782,97 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         scroll_item = table.item(target_row, 1)
         if scroll_item:
             table.scrollToItem(scroll_item)
+            
+    def _on_drawing_table_selection_changed(self) -> None:
+        d_name = self._get_target_drawing_name()
+        drawing = d_name if d_name != UILabels.DRAWING_UNSPECIFIED else ""
+        
+        # 選択図面をStateStoreに永続化
+        self.state_store.dispatch(SelectDrawingAction(drawing))
+        
+        if hasattr(self, "digitizing_logic"):
+            self.digitizing_logic.validate_and_sync()
+
+    def _on_drawing_table_header_clicked(self, logical_index: int) -> None:
+        """ヘッダーの「表示」列(0)がクリックされたら全画像のチェック状態を反転する"""
+        if logical_index != 0:
+            return
+        table = self.panel_display.get("drawing_list_table")
+        if table.rowCount() <= 1:
+            return
+
+        # 最初の画像行(1行目)のチェック状態を基準に全反転する
+        first_item = table.item(1, 0)
+        if not first_item:
+            return
+            
+        new_state = Qt.Unchecked if first_item.checkState() == Qt.Checked else Qt.Checked
+        
+        table.blockSignals(True)
+        try:
+            root = QgsProject.instance().layerTreeRoot()
+            if not root:
+                return
+            for row in range(1, table.rowCount()):
+                chk_item = table.item(row, 0)
+                if chk_item:
+                    chk_item.setCheckState(new_state)
+                    layer_id = chk_item.data(Qt.UserRole)
+                    if layer_id:
+                        tree_layer = root.findLayer(layer_id)
+                        if tree_layer:
+                            tree_layer.setItemVisibilityChecked(new_state == Qt.Checked)
+        finally:
+            table.blockSignals(False)
+
+    def _on_drawing_table_cell_changed(self, item: QTableWidgetItem) -> None:
+        """個別のチェックボックスが操作された場合、QGISレイヤツリーの可視性を連動させる"""
+        if item.column() != 0 or item.row() == 0:
+            return
+            
+        layer_id = item.data(Qt.UserRole)
+        if not layer_id:
+            return
+            
+        is_checked = (item.checkState() == Qt.Checked)
+        root = QgsProject.instance().layerTreeRoot()
+        if root:
+            tree_layer = root.findLayer(layer_id)
+            if tree_layer:
+                tree_layer.setItemVisibilityChecked(is_checked)
+
+    def _ensure_drawing_visible(self, layer_name: str) -> None:
+        """指定された図面レイヤを強制的に表示状態(可視化)にする"""
+        root = QgsProject.instance().layerTreeRoot()
+        if not root:
+            return
+        image_group = root.findGroup("画像ファイル")
+        if not image_group:
+            return
+            
+        changed = False
+        for tree_layer in image_group.findLayers():
+            l = tree_layer.layer()
+            if l and l.name() == layer_name:
+                tree_layer.setItemVisibilityChecked(True)
+                changed = True
+                break
+                
+        if changed:
+            self._update_drawing_combo()
 
     def _push_focus_state_to_tool(self) -> None:
         if self.map_tool is not None:
             state = self.state_store.state
-            self.map_tool.update_focus_state(state.focus_active, state.display_filters)
+            filters = dict(state.display_filters) if state.display_filters else {}
+            
+            # 「対象図面」の解決を UI (テーブル) からではなく State から純粋に読み取る
+            if filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
+                filters["drawing_name"] = state.selected_drawing_name
+            else:
+                filters["drawing_name"] = ""
+                
+            self.map_tool.update_focus_state(state.focus_active, filters)
 
     def _show_image_dialog(self) -> None:
         self.image_dialog.show()
@@ -760,7 +880,8 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         self.image_dialog.activateWindow()
 
     def _show_settings_dialog(self) -> None:
-        self.update_settings_ui_from_dict()
+        if hasattr(self, "settings_logic"):
+            self.settings_logic.update_settings_ui_from_dict()
         self.settings_dialog.show()
         self.settings_dialog.raise_()
         self.settings_dialog.activateWindow()
@@ -810,7 +931,13 @@ class MainDockWidget(QDockWidget, Tab1GeorefMixin, Tab3SettingsMixin):
         with self.busy_interaction_guard():
             state = self.state_store.state
             is_focus_on = state.focus_active
-            filters = state.display_filters if is_focus_on else {}
+            filters = dict(state.display_filters) if is_focus_on else {}
+
+            if is_focus_on:
+                if filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
+                    filters["drawing_name"] = state.selected_drawing_name
+                else:
+                    filters["drawing_name"] = ""
 
             expr = self.layer_manager.build_opacity_expression(is_focus_on, filters, 0)
             self.layer_manager.apply_opacity_expression(self.point_layer, expr)
