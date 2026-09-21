@@ -29,65 +29,28 @@ class WidgetType(Enum):
     TABLE = "table"
     SEGMENTED_TOGGLE = "segmented_toggle"
     INFO_PANEL = "info_panel"
-    #: T-0046: a labeled row of mutually-exclusive QRadioButtons (e.g.
-    #: start_dialog.py's session-type / grid-mode selectors), distinct from
-    #: SEGMENTED_TOGGLE's iOS-style button group. Uses FieldSpec.options for
-    #: the radio labels and FieldSpec.default_index for the initially
-    #: checked option, same as SEGMENTED_TOGGLE.
     RADIO_ROW = "radio_row"
-    #: T-0047: a labeled row wrapping a single UIStyleHelper.create_spinbox()
-    #: QSpinBox (e.g. dialogs.py's PointNameEntryDialog 点名 numeric input),
-    #: distinct from LINEEDIT_ROW since it carries an int range/default
-    #: instead of free text. Uses FieldSpec.spin_min/spin_max/spin_default.
     SPINBOX_ROW = "spinbox_row"
-    #: T-0048: a non-interactive bold header label (e.g. tab3_settings.py's
-    #: "基準点"/"遺物点"/"ラベル"/"表示縮尺" group separators). Wraps
-    #: UIStyleHelper.build_section_header(). Uses FieldSpec.label only; no
-    #: value/hook.
     SECTION_HEADER = "section_header"
-    #: T-0048: a compact label+QDoubleSpinBox row built via
-    #: UIStyleHelper.build_form_row() (label beside widget, not a full-width
-    #: build_flex_row), matching tab3_settings.py's pre-existing dense
-    #: settings-form look. Uses FieldSpec.dspin_min/dspin_max/dspin_step/
-    #: dspin_default.
     DOUBLE_SPINBOX_ROW = "double_spinbox_row"
-    #: T-0048: a compact label+color-swatch QPushButton row (also via
-    #: build_form_row), e.g. tab3_settings.py's 線色 pickers. Clicking fires
-    #: FieldSpec.on_click; the resulting color is read/written as a hex
-    #: string via BuiltPanel.get_value()/set_value(). Uses
-    #: FieldSpec.color_default.
     COLOR_BUTTON_ROW = "color_button_row"
-    #: T-0048: lays a list of FieldSpec.sub_fields out side by side in one
-    #: QHBoxLayout row (each sub-field built via its own normal builder),
-    #: for tab3_settings.py's paired rows (size+線幅 spinboxes, 線色+塗り
-    #: toggle, グリッド常時/指定 radio + threshold spinbox) that were
-    #: previously hand-built HBoxLayouts. Uses FieldSpec.sub_fields; each
-    #: sub-field's own FieldSpec.stretch controls its relative width.
     ROW_GROUP = "row_group"
-    #: T-0048 (人手確認フィードバック対応): an empty QWidget placeholder used
-    #: purely as a stretch spacer within a ROW_GROUP's sub_fields (e.g.
-    #: tab3_settings.py's ref_row2, which pairs the 線色 COLOR_BUTTON_ROW
-    #: with a same-width SPACER so the color button's row lines up with the
-    #: サイズ+線幅 row above it instead of stretching edge-to-edge). Carries
-    #: no value; excluded from CoreUIBuilder._VALUE_WIDGET_TYPES.
     SPACER = "spacer"
+    
+    # --- 新規追加 (アプローチB) ---
+    #: 複数のチェックボックスを横に並べる。複数選択が可能。
+    #: FieldSpec.options でラベルを指定し、FieldSpec.default_indices で初期選択を指定する。
+    CHECKBOX_ROW = "checkbox_row"
+    
+    #: 縦スクロール可能なリストウィジェット。
+    #: FieldSpec.checkable が True の場合はアイテムにチェックボックスが付与される。
+    LIST_WIDGET = "list_widget"
 
 
 @dataclass
 class ButtonDef:
     """One button, either standalone within a BUTTON_ROW field or as the
     trailing button of a LINEEDIT_ROW field (e.g. Tab1's "参照..." button).
-
-    :param field_id: Key the built QPushButton is registered under on the
-        BuiltPanel (retrieved via ``panel.get(field_id)``).
-    :param text: Button label text.
-    :param on_click: Event-hook name connected to ``clicked``; bound later
-        via ``panel.bind(on_click, callback)``. None if the button has no
-        event (rare).
-    :param style_variant: Optional UIStyleHelper button style
-        ("primary"/"accent"/"success"), or None for the default style.
-    :param enabled: Initial enabled state.
-    :param stretch: Layout stretch factor within its row.
     """
     field_id: str
     text: str
@@ -102,13 +65,6 @@ class InfoLine:
     """One line within an INFO_PANEL field (T-0045: models Tab1's status
     panel, which stacks a bold header / separator / plain status line / a
     word-wrapped multi-line residual summary).
-
-    :param kind: "bold" | "separator" | "plain" | "wrap".
-    :param field_id: Sub-key the built QLabel is registered under, as
-        ``f"{field.field_id}.{field_id}"`` (ignored for "separator").
-    :param text: Initial label text (ignored for "separator").
-    :param min_height: Optional minimum height in px (used for "wrap" lines
-        that need to reserve space for multiple lines up front).
     """
     kind: str
     field_id: Optional[str] = None
@@ -119,69 +75,6 @@ class InfoLine:
 @dataclass
 class FieldSpec:
     """One declared row/field within a PanelSpec.
-
-    Only the attributes relevant to ``widget_type`` need to be set; unused
-    attributes are ignored by CoreUIBuilder for that kind.
-
-    :param field_id: Key the built primary widget is registered under on the
-        BuiltPanel (retrieved via ``panel.get(field_id)``); also used as the
-        key for the row container widget (``panel.get_row(field_id)``),
-        which is what callers show()/hide() to toggle a whole row.
-    :param widget_type: Which WidgetType to construct.
-    :param label: Leading row label text (LINEEDIT_ROW/COMBOBOX_ROW), or the
-        button text (BUTTON).
-    :param placeholder: Placeholder text (LINEEDIT_ROW).
-    :param on_change: Event-hook name for value-changed signals
-        (LINEEDIT_ROW -> textChanged, COMBOBOX_ROW -> currentIndexChanged,
-        TABLE -> cellChanged, SEGMENTED_TOGGLE/RADIO_ROW -> "toggled to
-        index").
-    :param on_click: Event-hook name for BUTTON's ``clicked`` signal.
-    :param style_variant: UIStyleHelper button style for BUTTON.
-    :param enabled: Initial enabled state for BUTTON.
-    :param trailing_button: Optional ButtonDef appended after the input
-        widget within a LINEEDIT_ROW (e.g. "参照..." next to the image path
-        field).
-    :param buttons: Button list for BUTTON_ROW.
-    :param options: Segment/option labels for SEGMENTED_TOGGLE/RADIO_ROW.
-    :param default_index: Initially-checked segment/option index for
-        SEGMENTED_TOGGLE/RADIO_ROW.
-    :param table_headers: Column header labels for TABLE.
-    :param table_min_height: Minimum table height in px for TABLE.
-    :param table_col_resize_modes: Per-column resize mode tokens for TABLE
-        ("contents" or "stretch"; defaults to "contents" if the list is
-        shorter than the header count).
-    :param info_lines: Ordered InfoLine entries for INFO_PANEL.
-    :param main_ratio: Override for UIStyleHelper.build_flex_row's
-        main_ratio (label vs. content stretch). Defaults to
-        UIConfig.MAIN_RATIO when None (LINEEDIT_ROW/COMBOBOX_ROW), or
-        (0, 10) when None for SEGMENTED_TOGGLE.
-    :param row_height: Override for UIStyleHelper.build_flex_row's
-        row_height. Defaults to UIConfig.ROW_HEIGHT when None.
-    :param visible: Initial visibility of the row container.
-    :param spin_min: Minimum value for SPINBOX_ROW (default 0).
-    :param spin_max: Maximum value for SPINBOX_ROW (default 999999).
-    :param spin_default: Initial value for SPINBOX_ROW (default 0).
-    :param centered: T-0047: for BUTTON_ROW only, wraps the buttons in a
-        leading/trailing stretch (mirrors UIStyleHelper.
-        build_centered_button_row's "stretch - buttons - stretch" pattern),
-        matching the OK/キャンセル row convention used by dialogs.py's modal
-        confirmation dialogs. False (the default) preserves BUTTON_ROW's
-        original left-anchored, edge-to-edge layout used by e.g. Tab1's
-        rename_delete/transform_actions rows.
-    :param dspin_min: Minimum value for DOUBLE_SPINBOX_ROW (default 0.0).
-    :param dspin_max: Maximum value for DOUBLE_SPINBOX_ROW (default 999.0).
-    :param dspin_step: Single-step increment for DOUBLE_SPINBOX_ROW
-        (default 1.0).
-    :param dspin_default: Initial value for DOUBLE_SPINBOX_ROW (default 0.0).
-    :param color_default: Initial "#RRGGBB" color for COLOR_BUTTON_ROW
-        (default "#FFFFFF").
-    :param sub_fields: Ordered FieldSpec list laid out side by side for
-        ROW_GROUP; each sub-field is built via its own normal WidgetType
-        builder and registered under its own field_id (as if declared at
-        the top level), so ``panel.get()``/``get_value()``/``set_value()``
-        address sub-fields directly by their own field_id.
-    :param stretch: Relative width weight for this FieldSpec when used as a
-        ROW_GROUP sub-field (ignored for top-level fields; default 1).
     """
     field_id: str
     widget_type: WidgetType
@@ -213,31 +106,21 @@ class FieldSpec:
     color_default: str = "#FFFFFF"
     sub_fields: List["FieldSpec"] = field(default_factory=list)
     stretch: int = 1
-    #: T-0048 (人手確認フィードバック対応): optional fixed pixel width for
-    #: DOUBLE_SPINBOX_ROW/COLOR_BUTTON_ROW/SPINBOX_ROW's leading label
-    #: (build_form_row's QLabel), so labels of differing character count
-    #: (サイズ/線幅/線色/間隔) within the same panel start their input
-    #: widgets at the same x-offset. None (the default) preserves each
-    #: builder's prior natural-width label behavior, so screens that never
-    #: set this (e.g. dialogs.py's SPINBOX_ROW usage) are unaffected.
     label_width: Optional[int] = None
+
+    # --- 新規追加 (アプローチB) ---
+    #: CHECKBOX_ROW または checkable な LIST_WIDGET 用。初期状態でチェックを入れるインデックスのリスト。
+    default_indices: List[int] = field(default_factory=list)
+    #: LIST_WIDGET 用。Trueにするとアイテムにチェックボックスが付く。
+    checkable: bool = False
+    #: LIST_WIDGET 用。リストの最小高さ（px）。
+    list_min_height: Optional[int] = None
 
 
 @dataclass
 class PanelSpec:
     """A named collection of FieldSpecs built together into one container
     widget (a vertical stack, one row per field, in declared order).
-
-    :param panel_id: Identifying name for the panel (informational only;
-        not currently used for lookups).
-    :param fields: Ordered FieldSpec list.
-    :param rules: Optional list of generic business-logic rule instances
-        (see rules.py) applied to the BuiltPanel once construction
-        completes. Empty for tab1 (no generic rule is needed yet); reserved
-        for T-0047's mode-visibility/realtime-commit style rules.
-    :param margins: Container QVBoxLayout content margins
-        (left, top, right, bottom).
-    :param spacing: Container QVBoxLayout spacing between rows.
     """
     panel_id: str
     fields: List[FieldSpec]

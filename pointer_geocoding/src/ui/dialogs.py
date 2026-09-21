@@ -36,7 +36,7 @@ from ..logic.core import ExcavationType, AttributeType
 from .constants import UIConfig, UILabels, UIMessages, UIPlaceholders, UIDialogSizes, UIDialogTitles
 from .core.builder import CoreUIBuilder
 from .core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
-from ..uilogic.dialogs_logic import GridInputLogic, PointNameEntryLogic, FeatureManageLogic
+from ..uilogic.dialogs_logic import GridInputLogic, PointNameEntryLogic, FeatureManageLogic, PointEditLogic
 
 # =========================================================================
 # CoreUI Schemas for Dialogs (Co-location)
@@ -105,6 +105,153 @@ POINT_NAME_ENTRY_ACTIONS_SPEC = PanelSpec(
         ),
     ],
 )
+
+FEATURE_MANAGE_SPEC = PanelSpec(
+    panel_id="feature_manage",
+    fields=[
+        FieldSpec(
+            field_id="feature_list",
+            widget_type=WidgetType.TABLE,
+            table_headers=["遺構名リスト"],
+            table_col_resize_modes=["stretch"]
+        ),
+        FieldSpec(
+            field_id="feature_name",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label="遺構名:",
+            placeholder=UIPlaceholders.NEW_FEATURE,
+            on_change="feature_name_changed"
+        ),
+        FieldSpec(
+            field_id="feature_color",
+            widget_type=WidgetType.COLOR_BUTTON_ROW,
+            label="カラー:",
+            color_default="#FF5722",
+            on_click="color_clicked"
+        ),
+        FieldSpec(
+            field_id="actions",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=True,
+            buttons=[
+                ButtonDef(field_id="confirm", text=UILabels.BTN_CONFIRM, style_variant="primary", on_click="confirm_clicked"),
+                ButtonDef(field_id="cancel", text=UILabels.BTN_CANCEL, on_click="cancel_clicked")
+            ]
+        )
+    ]
+)
+
+DISPLAY_FILTER_SPEC = PanelSpec(
+    panel_id="display_filter",
+    fields=[
+        FieldSpec(field_id="sep_attr", widget_type=WidgetType.SECTION_HEADER, label=UILabels.FILTER_ATTRIBUTES),
+        FieldSpec(
+            field_id="attributes",
+            widget_type=WidgetType.CHECKBOX_ROW,
+            options=[AttributeType.S.value, AttributeType.P.value, AttributeType.C.value, AttributeType.SP.value],
+            default_indices=[0, 1, 2, 3]
+        ),
+        FieldSpec(field_id="sep_excav", widget_type=WidgetType.SECTION_HEADER, label=UILabels.FILTER_EXCAVATION),
+        FieldSpec(
+            field_id="excavation_types",
+            widget_type=WidgetType.CHECKBOX_ROW,
+            options=[ExcavationType.FEATURE.value, ExcavationType.GRID.value],
+            default_indices=[0, 1]
+        ),
+        FieldSpec(field_id="sep_feat", widget_type=WidgetType.SECTION_HEADER, label=UILabels.FILTER_FEATURE),
+        FieldSpec(
+            field_id="feature_names",
+            widget_type=WidgetType.LIST_WIDGET,
+            checkable=True,
+            list_min_height=150
+        ),
+        FieldSpec(field_id="sep_draw", widget_type=WidgetType.SECTION_HEADER, label=UILabels.FILTER_TARGET_DRAWING),
+        FieldSpec(
+            field_id="target_drawing",
+            widget_type=WidgetType.RADIO_ROW,
+            options=[UILabels.FILTER_DRAWING_SELECTED, UILabels.FILTER_DRAWING_ALL],
+            default_index=0
+        ),
+        FieldSpec(field_id="spacer", widget_type=WidgetType.SPACER),
+        FieldSpec(
+            field_id="actions",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=False,
+            buttons=[
+                ButtonDef(field_id="clear_all", text=UILabels.BTN_CLEAR_ALL, on_click="clear_all_clicked"),
+                ButtonDef(field_id="confirm", text=UILabels.BTN_CONFIRM, style_variant="primary", on_click="confirm_clicked"),
+                ButtonDef(field_id="cancel", text=UILabels.BTN_CANCEL, on_click="cancel_clicked")
+            ]
+        )
+    ]
+)
+
+POINT_EDIT_SPEC = PanelSpec(
+    panel_id="point_edit",
+    fields=[
+        FieldSpec(
+            field_id="attribute_code",
+            widget_type=WidgetType.COMBOBOX_ROW,
+            label=UILabels.ATTRIBUTE_CODE,
+            on_change="category_changed"
+        ),
+        FieldSpec(
+            field_id="excavation_type",
+            widget_type=WidgetType.COMBOBOX_ROW,
+            label=UILabels.EXCAVATION_TYPE,
+            on_change="excavation_type_changed"
+        ),
+        FieldSpec(
+            field_id="feature_name",
+            widget_type=WidgetType.COMBOBOX_ROW,
+            label=UILabels.FEATURE_SELECTOR,
+            on_change="feature_combo_changed"
+        ),
+        FieldSpec(
+            field_id="point_name",
+            widget_type=WidgetType.SPINBOX_ROW,
+            label=UILabels.POINT_NAME,
+            spin_min=1,
+            spin_max=999999,
+            spin_default=1,
+            on_change="point_name_changed"
+        ),
+        FieldSpec(
+            field_id="point_name_sp",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label=UILabels.POINT_NAME,
+            placeholder=UIPlaceholders.POINT_NAME_SP,
+            on_change="point_name_sp_changed",
+            visible=False
+        ),
+        FieldSpec(
+            field_id="branch_no",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label=UILabels.BRANCH_NO,
+            placeholder=UIPlaceholders.BRANCH_NO,
+            on_change="branch_no_changed"
+        ),
+        FieldSpec(
+            field_id="drawing_name",
+            widget_type=WidgetType.COMBOBOX_ROW,
+            label="対象図面",
+            on_change="drawing_name_changed"
+        ),
+        FieldSpec(
+            field_id="dialog_actions",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=False,
+            buttons=[
+                ButtonDef(field_id="delete", text=UILabels.BTN_DELETE_POINT, on_click="delete_clicked"),
+                ButtonDef(field_id="confirm_delete", text="削除を実行", on_click="confirm_delete_clicked"),
+                ButtonDef(field_id="confirm", text=UILabels.BTN_CONFIRM, style_variant="primary", on_click="confirm_clicked"),
+                ButtonDef(field_id="cancel", text=UILabels.BTN_CANCEL, on_click="cancel_clicked")
+            ]
+        )
+    ]
+)
+
+# =========================================================================
 
 class ModelessSectionDialog(QDialog):
     def __init__(self, title: str, content_widget: QWidget, on_show=None, on_close=None, parent=None, width=None, height=None):
@@ -369,50 +516,42 @@ class FeatureManageDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN, UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN)
+
         self.lbl_header = QLabel("遺構名作成・編集", self)
         f = self.lbl_header.font()
         f.setBold(True)
         self.lbl_header.setFont(f)
         layout.addWidget(self.lbl_header)
 
-        self.table_features = QTableWidget(self)
-        self.table_features.setColumnCount(1)
-        self.table_features.setHorizontalHeaderLabels(["遺構名リスト"])
-        self.table_features.horizontalHeader().setStretchLastSection(True)
+        self.panel = CoreUIBuilder.build(FEATURE_MANAGE_SPEC, parent=self)
+        layout.addWidget(self.panel.widget)
+        
+        self.table_features = self.panel.get("feature_list")
         self.table_features.verticalHeader().setVisible(False)
         self.table_features.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_features.setSelectionMode(QTableWidget.SingleSelection)
+        # TABLEはデフォルトでcellChangedにフックされるため、itemSelectionChangedは手動で紐付け
         self.table_features.itemSelectionChanged.connect(self._on_table_selection_changed)
-        layout.addWidget(self.table_features)
 
-        self.edit_name = QLineEdit(self)
-        self.edit_name.setPlaceholderText(UIPlaceholders.NEW_FEATURE)
+        self.edit_name = self.panel.get("feature_name")
         if HAS_QT_REGEX:
             self.edit_name.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[A-Za-z0-9_-]+$"), self.edit_name))
         else:
             self.edit_name.setValidator(QRegExpValidator(QRegExp(r"^[A-Za-z0-9_-]+$"), self.edit_name))
-        layout.addWidget(UIStyleHelper.build_flex_row(QLabel("遺構名:", self), [(self.edit_name, 1)], (3, 7)))
 
-        self.btn_color = QPushButton("カラー選択", self)
-        self.btn_color.clicked.connect(self._on_pick_color)
-        layout.addWidget(UIStyleHelper.build_flex_row(QLabel("カラー:", self), [(self.btn_color, 1)], (3, 7)))
+        self.btn_color = self.panel.get("feature_color")
 
+        # STATUS PANEL
         self.panel_status, self.lbl_status = UIStyleHelper.create_status_panel("", "info", self)
-        layout.addWidget(self.panel_status)
+        layout.insertWidget(2, self.panel_status)
 
-        actions_layout = QHBoxLayout()
-        self.btn_confirm = QPushButton(UILabels.BTN_CONFIRM, self)
-        UIStyleHelper.set_primary_button(self.btn_confirm)
-        self.btn_confirm.clicked.connect(self._on_confirm_clicked)
-        self.btn_cancel = QPushButton(UILabels.BTN_CANCEL, self)
-        self.btn_cancel.clicked.connect(self.reject)
-        actions_layout.addStretch(1)
-        actions_layout.addWidget(self.btn_confirm)
-        actions_layout.addWidget(self.btn_cancel)
-        actions_layout.addStretch(1)
-        layout.addLayout(actions_layout)
+        self.panel.bind("color_clicked", self._on_pick_color)
+        self.panel.bind("feature_name_changed", self._on_realtime_validate)
+        self.panel.bind("confirm_clicked", self._on_confirm_clicked)
+        self.panel.bind("cancel_clicked", self.reject)
 
-        self.edit_name.textChanged.connect(self._on_realtime_validate)
+        self.btn_confirm = self.panel.get("confirm")
 
     def _populate_table(self, select_feature=None):
         self.table_features.blockSignals(True)
@@ -437,8 +576,7 @@ class FeatureManageDialog(QDialog):
 
     def _update_color_button(self):
         h = self.current_color or "#FF5722"
-        self.btn_color.setStyleSheet(f"background-color: {h}; color: #FFFFFF; font-weight: bold; border-radius: 4px; padding: 4px;")
-        self.btn_color.setText(h)
+        self.panel.set_value("feature_color", h)
 
     def _on_pick_color(self):
         c = QColorDialog.getColor(QColor(self.current_color or "#FF5722"), self, UIDialogTitles.COLOR_PICKER)
@@ -571,14 +709,7 @@ class PointNameEntryDialog(QDialog):
         return self.result_point_name, self.result_branch_no
 
 class DisplayFilterDialog(QDialog):
-    """Modal dialog for configuring display filters (FEAT-05).
-
-    Allows filtering points and labels by:
-    - Attribute (S, P, C, SP)
-    - Excavation type (遺構, グリッド)
-    - Feature names (QListWidget with user-checkable items)
-    - Target drawing scope (選択図面 / 全図面)
-    """
+    """Modal dialog for configuring display filters (FEAT-05)."""
 
     def __init__(
         self,
@@ -616,119 +747,27 @@ class DisplayFilterDialog(QDialog):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(
-            UIConfig.COMMON_MARGIN_LR,
-            UIConfig.DIALOG_MARGIN,
-            UIConfig.COMMON_MARGIN_LR,
-            UIConfig.DIALOG_MARGIN,
-        )
+        layout.setContentsMargins(UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN, UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN)
         layout.setSpacing(0)
 
-        # 1. 属性 (Attributes)
-        layout.addWidget(UIStyleHelper.build_separator(self, title_text=UILabels.FILTER_ATTRIBUTES))
-        container_attr = QWidget(self)
-        layout_attr = QHBoxLayout(container_attr)
-        layout_attr.setContentsMargins(0, 0, 0, 0)
-        layout_attr.setSpacing(8)
-
-        self.cb_attr_s = QCheckBox(AttributeType.S.value, container_attr)
-        self.cb_attr_p = QCheckBox(AttributeType.P.value, container_attr)
-        self.cb_attr_c = QCheckBox(AttributeType.C.value, container_attr)
-        self.cb_attr_sp = QCheckBox(AttributeType.SP.value, container_attr)
-
-        layout_attr.addWidget(self.cb_attr_s)
-        layout_attr.addWidget(self.cb_attr_p)
-        layout_attr.addWidget(self.cb_attr_c)
-        layout_attr.addWidget(self.cb_attr_sp)
-        layout_attr.addStretch(1)
-        layout.addWidget(container_attr)
-
-        # 2. 出土形態 (Excavation Types)
-        layout.addWidget(UIStyleHelper.build_separator(self, title_text=UILabels.FILTER_EXCAVATION))
-        container_excav = QWidget(self)
-        layout_excav = QHBoxLayout(container_excav)
-        layout_excav.setContentsMargins(0, 0, 0, 0)
-        layout_excav.setSpacing(8)
-
-        self.cb_excav_feat = QCheckBox(ExcavationType.FEATURE.value, container_excav)
-        self.cb_excav_grid = QCheckBox(ExcavationType.GRID.value, container_excav)
-
-        layout_excav.addWidget(self.cb_excav_feat)
-        layout_excav.addWidget(self.cb_excav_grid)
-        layout_excav.addStretch(1)
-        layout.addWidget(container_excav)
-
-        # 3. 遺構名 (Feature Names)
-        layout.addWidget(UIStyleHelper.build_separator(self, title_text=UILabels.FILTER_FEATURE))
-        container_feat = QWidget(self)
-        layout_feat = QVBoxLayout(container_feat)
-        layout_feat.setContentsMargins(0, 0, 0, 0)
-        layout_feat.setSpacing(4)
-
-        self.list_features = QListWidget(container_feat)
+        self.panel = CoreUIBuilder.build(DISPLAY_FILTER_SPEC, parent=self)
+        layout.addWidget(self.panel.widget)
+        
+        self.list_features = self.panel.get("feature_names")
         self.list_features.setSelectionMode(QListWidget.NoSelection)
         self._populate_feature_list(self._all_feature_names)
-        layout_feat.addWidget(self.list_features)
-        layout.addWidget(container_feat)
-
-        # 4. 対象図面 (Target Drawing)
-        layout.addWidget(UIStyleHelper.build_separator(self, title_text=UILabels.FILTER_TARGET_DRAWING))
-        container_drawing = QWidget(self)
-        layout_drawing = QHBoxLayout(container_drawing)
-        layout_drawing.setContentsMargins(0, 0, 0, 0)
-        layout_drawing.setSpacing(16)
-
-        self.radio_drawing_selected = QRadioButton(UILabels.FILTER_DRAWING_SELECTED, container_drawing)
-        self.radio_drawing_all = QRadioButton(UILabels.FILTER_DRAWING_ALL, container_drawing)
-        self.drawing_btn_group = QButtonGroup(container_drawing)
-        self.drawing_btn_group.addButton(self.radio_drawing_selected)
-        self.drawing_btn_group.addButton(self.radio_drawing_all)
-        self.radio_drawing_selected.setChecked(True)
-
-        layout_drawing.addWidget(self.radio_drawing_selected)
-        layout_drawing.addWidget(self.radio_drawing_all)
-        layout_drawing.addStretch(1)
-        layout.addWidget(container_drawing)
-
-        layout.addSpacing(UIConfig.SEPARATOR_MARGIN)
-
-        # 5. アクションボタン (すべてクリア・確定・キャンセル)
-        row_actions = QWidget(self)
-        actions_layout = QHBoxLayout(row_actions)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
-
-        self.btn_clear_all = QPushButton(UILabels.BTN_CLEAR_ALL, row_actions)
-        self.btn_clear_all.clicked.connect(self._on_clear_all_clicked)
-        actions_layout.addWidget(self.btn_clear_all)
-
-        actions_layout.addStretch(1)
-
-        self.btn_confirm = QPushButton(UILabels.BTN_CONFIRM, row_actions)
-        UIStyleHelper.set_primary_button(self.btn_confirm)
-        self.btn_confirm.clicked.connect(self.accept)
-        actions_layout.addWidget(self.btn_confirm)
-
-        self.btn_cancel = QPushButton(UILabels.BTN_CANCEL, row_actions)
-        self.btn_cancel.clicked.connect(self.reject)
-        actions_layout.addWidget(self.btn_cancel)
-
-        layout.addWidget(row_actions)
+        
+        self.panel.bind("clear_all_clicked", self._on_clear_all_clicked)
+        self.panel.bind("confirm_clicked", self.accept)
+        self.panel.bind("cancel_clicked", self.reject)
 
     def _on_clear_all_clicked(self) -> None:
-        """Reset all filters to default select all state."""
-        self.cb_attr_s.setChecked(True)
-        self.cb_attr_p.setChecked(True)
-        self.cb_attr_c.setChecked(True)
-        self.cb_attr_sp.setChecked(True)
-        
-        self.cb_excav_feat.setChecked(True)
-        self.cb_excav_grid.setChecked(True)
-        
-        for i in range(self.list_features.count()):
-            self.list_features.item(i).setCheckState(Qt.Checked)
-            
-        self.radio_drawing_selected.setChecked(True)
+        self.panel.set_values({
+            "attributes": [AttributeType.S.value, AttributeType.P.value, AttributeType.C.value, AttributeType.SP.value],
+            "excavation_types": [ExcavationType.FEATURE.value, ExcavationType.GRID.value],
+            "feature_names": self._all_feature_names,
+            "target_drawing": 0
+        })
 
     def _populate_feature_list(self, feature_names: List[str]) -> None:
         self.list_features.clear()
@@ -738,87 +777,32 @@ class DisplayFilterDialog(QDialog):
             item.setCheckState(Qt.Checked)
 
     def set_feature_names(self, feature_names: List[str]) -> None:
-        """Update the list of selectable features."""
         self._all_feature_names = list(feature_names)
         self._populate_feature_list(self._all_feature_names)
 
     def set_filters(self, filters: Dict[str, Any]) -> None:
-        """Apply filter configuration dictionary to UI controls."""
-        attrs = filters.get("attributes")
-        if attrs is not None:
-            attr_set = set(attrs)
-            self.cb_attr_s.setChecked(AttributeType.S.value in attr_set)
-            self.cb_attr_p.setChecked(AttributeType.P.value in attr_set)
-            self.cb_attr_c.setChecked(AttributeType.C.value in attr_set)
-            self.cb_attr_sp.setChecked(AttributeType.SP.value in attr_set)
-        else:
-            self.cb_attr_s.setChecked(True)
-            self.cb_attr_p.setChecked(True)
-            self.cb_attr_c.setChecked(True)
-            self.cb_attr_sp.setChecked(True)
-
-        excs = filters.get("excavation_types")
-        if excs is not None:
-            exc_set = set(excs)
-            self.cb_excav_feat.setChecked(ExcavationType.FEATURE.value in exc_set)
-            self.cb_excav_grid.setChecked(ExcavationType.GRID.value in exc_set)
-        else:
-            self.cb_excav_feat.setChecked(True)
-            self.cb_excav_grid.setChecked(True)
-
-        target_features = filters.get("feature_names")
-        if target_features is not None:
-            feat_set = set(target_features)
-            for i in range(self.list_features.count()):
-                item = self.list_features.item(i)
-                item.setCheckState(Qt.Checked if item.text() in feat_set else Qt.Unchecked)
-        else:
-            for i in range(self.list_features.count()):
-                self.list_features.item(i).setCheckState(Qt.Checked)
-
-        target_drawing = filters.get("target_drawing", UILabels.FILTER_DRAWING_SELECTED)
-        if target_drawing == UILabels.FILTER_DRAWING_ALL:
-            self.radio_drawing_all.setChecked(True)
-        else:
-            self.radio_drawing_selected.setChecked(True)
+        attrs = filters.get("attributes", [AttributeType.S.value, AttributeType.P.value, AttributeType.C.value, AttributeType.SP.value])
+        excs = filters.get("excavation_types", [ExcavationType.FEATURE.value, ExcavationType.GRID.value])
+        feats = filters.get("feature_names", self._all_feature_names)
+        target_draw = filters.get("target_drawing", UILabels.FILTER_DRAWING_SELECTED)
+        
+        self.panel.set_values({
+            "attributes": attrs,
+            "excavation_types": excs,
+            "feature_names": feats,
+            "target_drawing": 1 if target_draw == UILabels.FILTER_DRAWING_ALL else 0
+        })
 
     def get_filters(self) -> Dict[str, Any]:
-        """Extract current filter configuration dictionary from UI controls."""
-        attributes: List[str] = []
-        if self.cb_attr_s.isChecked():
-            attributes.append(AttributeType.S.value)
-        if self.cb_attr_p.isChecked():
-            attributes.append(AttributeType.P.value)
-        if self.cb_attr_c.isChecked():
-            attributes.append(AttributeType.C.value)
-        if self.cb_attr_sp.isChecked():
-            attributes.append(AttributeType.SP.value)
-
-        excavation_types: List[str] = []
-        if self.cb_excav_feat.isChecked():
-            excavation_types.append(ExcavationType.FEATURE.value)
-        if self.cb_excav_grid.isChecked():
-            excavation_types.append(ExcavationType.GRID.value)
-
-        feature_names: List[str] = []
-        for i in range(self.list_features.count()):
-            item = self.list_features.item(i)
-            if item.checkState() == Qt.Checked:
-                feature_names.append(item.text())
-
-        target_drawing = (
-            UILabels.FILTER_DRAWING_ALL
-            if self.radio_drawing_all.isChecked()
-            else UILabels.FILTER_DRAWING_SELECTED
-        )
-
+        vals = self.panel.collect_values()
+        target_drawing = UILabels.FILTER_DRAWING_ALL if vals.get("target_drawing") == 1 else UILabels.FILTER_DRAWING_SELECTED
+        
         return {
-            "attributes": attributes,
-            "excavation_types": excavation_types,
-            "feature_names": feature_names,
+            "attributes": vals.get("attributes", []),
+            "excavation_types": vals.get("excavation_types", []),
+            "feature_names": vals.get("feature_names", []),
             "target_drawing": target_drawing,
         }
-
 
 
 class PointEditDialog(QDialog):
@@ -830,6 +814,8 @@ class PointEditDialog(QDialog):
         self.drawing_names = drawing_names
         self.dialog_action = "cancel"  # "confirm", "delete", "cancel"
         
+        self.logic = PointEditLogic(self.layer_manager, self)
+        
         self.setWindowTitle("点情報編集")
         self.setModal(True)
         self.setMinimumWidth(360)
@@ -840,99 +826,67 @@ class PointEditDialog(QDialog):
         
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        
-        # Status panel
+        layout.setContentsMargins(UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN, UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN)
+
         self.panel_status, self.lbl_status = UIStyleHelper.create_status_panel("入力値で更新", "info", self)
         layout.addWidget(self.panel_status)
+
+        self.panel = CoreUIBuilder.build(POINT_EDIT_SPEC, parent=self)
+        layout.addWidget(self.panel.widget)
         
-        # Form
-        form_layout = QVBoxLayout()
-        
-        # Attribute
-        self.combo_attribute = QComboBox(self)
+        self.combo_attribute = self.panel.get("attribute_code")
         for value in UILabels.ATTRIBUTE_OPTIONS:
             self.combo_attribute.addItem(UILabels.ATTRIBUTE_DISPLAY_MAP.get(value, value), value)
-        self.combo_attribute.currentIndexChanged.connect(self._on_category_changed)
-        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.ATTRIBUTE_CODE, self), [(self.combo_attribute, 1)], (3, 7)))
-        
-        # Excavation Type
-        self.combo_excavation_type = QComboBox(self)
+
+        self.combo_excavation_type = self.panel.get("excavation_type")
         self.combo_excavation_type.addItems(UILabels.EXCAVATION_OPTIONS)
-        self.combo_excavation_type.currentIndexChanged.connect(self._on_excavation_type_changed)
-        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.EXCAVATION_TYPE, self), [(self.combo_excavation_type, 1)], (3, 7)))
-        
-        # Feature Name
-        self.combo_feature_name = QComboBox(self)
+
+        self.combo_feature_name = self.panel.get("feature_name")
         self.combo_feature_name.addItem(UILabels.UNREGISTERED)
-        self.combo_feature_name.currentTextChanged.connect(self._validate)
-        self.row_feature_selector = UIStyleHelper.build_flex_row(QLabel(UILabels.FEATURE_SELECTOR, self), [(self.combo_feature_name, 1)], (3, 7))
-        form_layout.addWidget(self.row_feature_selector)
-        
-        # Point Name
-        self.edit_point_name = UIStyleHelper.create_spinbox(1, 999999, 1, self)
-        self.edit_point_name.valueChanged.connect(self._validate)
-        
-        self.edit_point_name_sp = QLineEdit(self)
-        self.edit_point_name_sp.setPlaceholderText(UIPlaceholders.POINT_NAME_SP)
+
+        self.edit_point_name = self.panel.get("point_name")
+        self.edit_point_name_sp = self.panel.get("point_name_sp")
         if HAS_QT_REGEX:
             self.edit_point_name_sp.setValidator(QRegularExpressionValidator(QRegularExpression(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp))
         else:
             self.edit_point_name_sp.setValidator(QRegExpValidator(QRegExp(r"^[A-Za-z0-9_-]+$"), self.edit_point_name_sp))
-        self.edit_point_name_sp.hide()
-        self.edit_point_name_sp.textChanged.connect(self._validate)
+            
+        self.edit_branch_no = self.panel.get("branch_no")
         
-        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.POINT_NAME, self), [(self.edit_point_name, 1), (self.edit_point_name_sp, 1)], (3, 7)))
-        
-        # Branch No
-        self.edit_branch_no = QLineEdit(self)
-        self.edit_branch_no.setPlaceholderText(UIPlaceholders.BRANCH_NO)
-        self.edit_branch_no.textChanged.connect(self._validate)
-        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel(UILabels.BRANCH_NO, self), [(self.edit_branch_no, 1)], (3, 7)))
-        
-        # Target Drawing
-        self.combo_drawing_name = QComboBox(self)
+        self.combo_drawing_name = self.panel.get("drawing_name")
         self.combo_drawing_name.addItem(UILabels.DRAWING_UNSPECIFIED)
         for name in self.drawing_names:
             if name != UILabels.DRAWING_UNSPECIFIED:
                 self.combo_drawing_name.addItem(name)
-        form_layout.addWidget(UIStyleHelper.build_flex_row(QLabel("対象図面", self), [(self.combo_drawing_name, 1)], (3, 7)))
-        
-        layout.addLayout(form_layout)
-        
-        # Actions
-        actions_layout = QHBoxLayout()
-        self.btn_delete = QPushButton(UILabels.BTN_DELETE_POINT, self)
+
+        self.btn_delete = self.panel.get("delete")
         self.btn_delete.setStyleSheet("background-color: #D32F2F; color: #FFFFFF; font-weight: bold; border-radius: 4px;")
-        self.btn_delete.clicked.connect(self._on_delete_clicked)
         
-        self.btn_confirm = QPushButton(UILabels.BTN_CONFIRM, self)
-        UIStyleHelper.set_primary_button(self.btn_confirm)
-        self.btn_confirm.clicked.connect(self._on_confirm_clicked)
-        
-        self.btn_cancel = QPushButton(UILabels.BTN_CANCEL, self)
-        self.btn_cancel.clicked.connect(self.reject)
-        
-        # For double-confirmation of delete
-        self.btn_confirm_delete = QPushButton("削除を実行", self)
+        self.btn_confirm_delete = self.panel.get("confirm_delete")
         self.btn_confirm_delete.setStyleSheet("background-color: #D32F2F; color: #FFFFFF; font-weight: bold; border-radius: 4px;")
         self.btn_confirm_delete.hide()
-        self.btn_confirm_delete.clicked.connect(self._on_confirm_delete_clicked)
-        
-        actions_layout.addWidget(self.btn_delete)
-        actions_layout.addWidget(self.btn_confirm_delete)
-        actions_layout.addStretch()
-        actions_layout.addWidget(self.btn_confirm)
-        actions_layout.addWidget(self.btn_cancel)
-        layout.addLayout(actions_layout)
-        
+
+        self.btn_confirm = self.panel.get("confirm")
+
+        self.panel.bind("category_changed", self._on_category_changed)
+        self.panel.bind("excavation_type_changed", self._on_excavation_type_changed)
+        self.panel.bind("feature_combo_changed", self._validate)
+        self.panel.bind("point_name_changed", self._validate)
+        self.panel.bind("point_name_sp_changed", self._validate)
+        self.panel.bind("branch_no_changed", self._validate)
+        self.panel.bind("drawing_name_changed", self._validate)
+
+        self.panel.bind("delete_clicked", self._on_delete_clicked)
+        self.panel.bind("confirm_delete_clicked", self._on_confirm_delete_clicked)
+        self.panel.bind("confirm_clicked", self._on_confirm_clicked)
+        self.panel.bind("cancel_clicked", self.reject)
+
     def _populate_initial_values(self):
-        # drawing name
         d_name = self.feature_data.get("drawing_name", "").strip()
         target_name = d_name if d_name else UILabels.DRAWING_UNSPECIFIED
         idx = self.combo_drawing_name.findText(target_name)
         if idx >= 0: self.combo_drawing_name.setCurrentIndex(idx)
         
-        # Feature names
         if self.layer_manager and hasattr(self.layer_manager, "point_layer"):
             layer = self.layer_manager.point_layer
             if layer and layer.isValid():
@@ -972,13 +926,13 @@ class PointEditDialog(QDialog):
 
     def _on_category_changed(self, *args):
         is_sp = (self.combo_attribute.currentData() == AttributeType.SP.value)
-        self.edit_point_name.setVisible(not is_sp)
-        self.edit_point_name_sp.setVisible(is_sp)
+        self.panel.get_row("point_name").setVisible(not is_sp)
+        self.panel.get_row("point_name_sp").setVisible(is_sp)
         self._validate()
         
     def _on_excavation_type_changed(self, *args):
         is_feature = (self.combo_excavation_type.currentText() == ExcavationType.FEATURE.value)
-        self.row_feature_selector.setVisible(is_feature)
+        self.panel.get_row("feature_name").setVisible(is_feature)
         self._validate()
 
     def _get_current_point_name(self) -> str:
@@ -1001,44 +955,22 @@ class PointEditDialog(QDialog):
         if drawing_name == UILabels.DRAWING_UNSPECIFIED:
             drawing_name = ""
             
-        has_error = False
-        msg = "入力値で更新"
-        status = "info"
+        attr_type = self.combo_attribute.currentData()
+        exclude_id = self.feature_data.get("feature_id")
+
+        is_valid, msg, status, is_feat_err, is_dup_err = self.logic.validate_inputs(
+            ex_type, feat_name, attr_type, point_name, branch_no, drawing_name, exclude_id
+        )
+
+        UIStyleHelper.set_error_border(self.combo_feature_name, is_feat_err)
         
-        if ex_type == ExcavationType.FEATURE.value and not feat_name:
-            has_error = True
-            msg = UILabels.STATUS_ERR_FEATURE_REQUIRED
-            status = "error"
-            self.combo_feature_name.setStyleSheet("border: 1px solid red;")
-        else:
-            self.combo_feature_name.setStyleSheet("")
-            
-        if not has_error:
-            # duplicate check
-            if self.layer_manager and hasattr(self.layer_manager, "point_layer"):
-                layer = self.layer_manager.point_layer
-                if layer and layer.isValid():
-                    from ..logic.core import check_point_duplicate
-                    dup = check_point_duplicate(
-                        layer, ex_type, feat_name,
-                        point_name, branch_no, drawing_name, self.feature_data.get("feature_id")
-                    )
-                    if dup:
-                        has_error = True
-                        msg = UILabels.STATUS_ERR_DUPLICATE
-                        status = "error"
-                        if self.combo_attribute.currentData() == AttributeType.SP.value:
-                            self.edit_point_name_sp.setStyleSheet("border: 1px solid red;")
-                        else:
-                            self.edit_point_name.setStyleSheet("border: 1px solid red;")
-                        self.edit_branch_no.setStyleSheet("border: 1px solid red;")
-                    else:
-                        self.edit_point_name_sp.setStyleSheet("")
-                        self.edit_point_name.setStyleSheet("")
-                        self.edit_branch_no.setStyleSheet("")
-        
+        is_sp = (attr_type == AttributeType.SP.value)
+        UIStyleHelper.set_error_border(self.edit_point_name, is_dup_err and not is_sp)
+        UIStyleHelper.set_error_border(self.edit_point_name_sp, is_dup_err and is_sp)
+        UIStyleHelper.set_error_border(self.edit_branch_no, is_dup_err)
+
         UIStyleHelper.update_status_panel(self.panel_status, self.lbl_status, msg, status)
-        self.btn_confirm.setEnabled(not has_error)
+        self.btn_confirm.setEnabled(is_valid)
         
     def _on_delete_clicked(self):
         self.btn_delete.hide()
