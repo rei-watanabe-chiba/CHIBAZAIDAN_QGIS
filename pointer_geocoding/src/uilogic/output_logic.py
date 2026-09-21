@@ -4,75 +4,112 @@
  ***************************************************************************/
 
 Tab 4 (出力) のUIイベントを受容し、ビジネスロジック（CSVエクスポート等）
-を処理するController層です。View層からは UIコンポーネント を注入（DI）されることで
-直接イベントをバインドし、循環参照（Circular Import）を防ぎます。
+を処理するController層です。View層からは BuiltPanel と コールバックを
+DI (注入) されることで、循環参照を防ぎつつ単一方向データフローを実現します。
 """
 import os
+from typing import Optional, Dict, Any, Callable
 from qgis.PyQt.QtCore import QObject
-from qgis.PyQt.QtWidgets import QFileDialog
 from qgis.core import Qgis
 
 from ..logic.transform import export_points_to_csv
-from ..ui.constants import UIDialogTitles, UIMessages
+from ..ui.core.state import UIStateStore, UpdateOutputSettingsAction
+from ..ui.core.builder import BuiltPanel
 
 
 class OutputLogic(QObject):
     """
     CSV出力制御を担うControllerクラス。
     """
-    def __init__(self, layer_manager, layers_dict, iface, parent=None):
+    def __init__(
+        self, 
+        state_store: UIStateStore, 
+        layer_manager: Any, 
+        parent: Optional[QObject] = None
+    ):
         super().__init__(parent)
+        self.state_store = state_store
         self.layer_manager = layer_manager
-        self.layers_dict = layers_dict
-        self.iface = iface
-        self.point_layer = layers_dict.get("point_layer")
         self.parent_widget = parent
 
-        self.edit_csv_path = None
-        self.radio_utf8 = None
+        self.panel: Optional[BuiltPanel] = None
+        self.browse_csv_dialog_cb: Callable[[str], str] = lambda d: ""
+        self.show_message_bar_cb: Callable[[str, str, int, int], None] = lambda t, m, l, d: None
 
-    def bind_ui(self, edit_csv_path, radio_utf8, btn_browse_csv, btn_export_csv):
-        """ViewからUIコンポーネントを受け取り、シグナルをバインドする"""
-        self.edit_csv_path = edit_csv_path
-        self.radio_utf8 = radio_utf8
+    def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
+        """View層からファイルダイアログやメッセージバー操作などの関数を受け取る"""
+        self.browse_csv_dialog_cb = callbacks.get("browse_csv_dialog", self.browse_csv_dialog_cb)
+        self.show_message_bar_cb = callbacks.get("show_message_bar", self.show_message_bar_cb)
+
+    def bind_ui_panels(self, panel: BuiltPanel) -> None:
+        """Viewから BuiltPanel インスタンスを受け取り、シグナルをバインドする"""
+        self.panel = panel
         
-        # Controller自身でイベントをバインド
-        btn_browse_csv.clicked.connect(self._browse_csv_path)
-        btn_export_csv.clicked.connect(self._on_export_csv_clicked)
+        self.panel.bind("encoding_changed", self._on_encoding_changed)
+        self.panel.bind("csv_path_changed", self._on_csv_path_changed)
+        self.panel.bind("browse_csv_clicked", self._on_browse_csv_clicked)
+        self.panel.bind("export_csv_clicked", self._on_export_csv_clicked)
+        
+        # UIStateStoreからの状態変更検知イベントを接続
+        self.state_store.state_changed.connect(self.on_state_changed)
 
-    def _browse_csv_path(self) -> None:
-        """Browse destination path for CSV export."""
-        default_dir = self.layers_dict.get("session_dir", os.path.expanduser("~"))
-        filepath, _ = QFileDialog.getSaveFileName(
-            self.parent_widget,
-            UIDialogTitles.BROWSE_CSV,
-            default_dir,
-            UIDialogTitles.CSV_FILTER,
-        )
+    # =========================================================================
+    # 状態の同期 (一方向データフローの受け口)
+    # =========================================================================
+
+    def on_state_changed(self, new_state: Any, diff: Dict[str, Any]) -> None:
+        if not self.panel:
+            return
+            
+        if "output_encoding" in diff:
+            widget = self.panel.get("encoding")
+            widget.blockSignals(True)
+            self.panel.set_value("encoding", new_state.output_encoding)
+            widget.blockSignals(False)
+            
+        if "output_csv_path" in diff:
+            widget = self.panel.get("csv_path")
+            widget.blockSignals(True)
+            self.panel.set_value("csv_path", new_state.output_csv_path)
+            widget.blockSignals(False)
+
+    # =========================================================================
+    # イベントハンドラ・Action Dispatch
+    # =========================================================================
+
+    def _on_encoding_changed(self, idx: int) -> None:
+        self.state_store.dispatch(UpdateOutputSettingsAction(encoding=idx))
+
+    def _on_csv_path_changed(self, *args) -> None:
+        path = self.panel.get_value("csv_path").strip()
+        self.state_store.dispatch(UpdateOutputSettingsAction(csv_path=path))
+
+    def _on_browse_csv_clicked(self) -> None:
+        start_dir = self.layer_manager.session_dir if self.layer_manager.session_dir else os.path.expanduser("~")
+        # Viewから渡された関数でダイアログを起動
+        filepath = self.browse_csv_dialog_cb(start_dir)
         if filepath:
-            self.edit_csv_path.setText(os.path.normpath(filepath))
+            norm_path = os.path.normpath(filepath)
+            self.state_store.dispatch(UpdateOutputSettingsAction(csv_path=norm_path))
 
     def _on_export_csv_clicked(self) -> None:
-        """Export digitized points directly to CSV."""
-        filepath = self.edit_csv_path.text().strip()
+        state = self.state_store.state
+        filepath = state.output_csv_path
+        
         if not filepath:
-            self._browse_csv_path()
-            filepath = self.edit_csv_path.text().strip()
+            self._on_browse_csv_clicked()
+            # キャンセルされた場合は終了
+            filepath = self.state_store.state.output_csv_path
             if not filepath:
                 return
 
-        encoding = "utf-8-sig" if self.radio_utf8.isChecked() else "cp932"
+        encoding = "utf-8-sig" if state.output_encoding == 0 else "cp932"
+        point_layer = self.layer_manager.point_layer
         
-        # FEAT-04: SURVEY_CSV_EXPORT 制約に基づくエクスポート処理
-        # 未計算のハードブロック制約などは logic/transform.py 側で処理される
+        # ビジネスロジック関数の呼び出し
         success, msg = export_points_to_csv(
-            self.point_layer, filepath, encoding=encoding, parent=self.parent_widget
+            point_layer, filepath, encoding=encoding, parent=self.parent_widget
         )
 
         if success:
-            self.iface.messageBar().pushMessage(
-                UIMessages.MSG_EXPORT_CSV_TITLE,
-                msg,
-                level=Qgis.MessageLevel.Success,
-                duration=5,
-            )
+            self.show_message_bar_cb("CSV出力完了", msg, Qgis.MessageLevel.Success, 5)

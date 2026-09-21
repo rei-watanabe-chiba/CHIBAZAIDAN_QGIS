@@ -43,6 +43,10 @@ class UIState:
     # 7. プログラムからの入力制御・UIロック状態
     is_processing: bool = False
     digitizing_inputs: Dict[str, Any] = field(default_factory=dict)
+    
+    # 8. 出力 (Tab4) 状態 (新規追加)
+    output_encoding: int = 0  # 0: UTF-8, 1: Shift-JIS
+    output_csv_path: str = ""
 
 class UIAction:
     """状態更新の意図を表現する基底クラス"""
@@ -129,6 +133,13 @@ class SetSuppressCommitAction(UIAction):
 class ResetSelectionAction(UIAction):
     pass
 
+# ==========================================
+# 出力 (Tab4) 系 Action (新規追加)
+# ==========================================
+@dataclass
+class UpdateOutputSettingsAction(UIAction):
+    encoding: Optional[int] = None
+    csv_path: Optional[str] = None
 
 class UIStateStore(QObject):
     state_changed = pyqtSignal(object, dict)
@@ -203,10 +214,16 @@ class UIStateStore(QObject):
         elif isinstance(action, SetProcessingAction):
             new_state_kwargs['is_processing'] = action.is_processing
         elif isinstance(action, UpdateDigitizingInputsAction):
-            # 既存の入力値キャッシュに新しい入力値をマージして更新
             current_inputs = dict(self._state.digitizing_inputs)
             current_inputs.update(action.inputs)
             new_state_kwargs['digitizing_inputs'] = current_inputs
+        
+        # 出力 (Tab4) 系 (新規追加)
+        elif isinstance(action, UpdateOutputSettingsAction):
+            if action.encoding is not None:
+                new_state_kwargs['output_encoding'] = action.encoding
+            if action.csv_path is not None:
+                new_state_kwargs['output_csv_path'] = action.csv_path
             
         # 状態リセット（クリーンアップ）
         elif isinstance(action, ResetSelectionAction):
