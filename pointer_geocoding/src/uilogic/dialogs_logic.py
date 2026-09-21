@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, Tuple, Callable
 
 from qgis.PyQt.QtCore import QObject
 
-from ..logic.core import check_point_duplicate, build_point_ident, to_survey_coords
+from ..logic.core import check_point_duplicate, build_point_ident, to_survey_coords, ExcavationType
 from ..ui.constants import UILabels, UIMessages
 from ..ui.core.validators import RequiredValidator, DuplicateValidator
 
@@ -100,3 +100,47 @@ class FeatureManageLogic(QObject):
             if text in self.feature_colors and text != current_feature:
                 return False, f"エラー: 遺構名 '{text}' は既に登録されています。", "error"
             return True, UILabels.STATUS_MSG_EDIT_FEATURE.format(feature=text), "success"
+
+
+class PointEditLogic(QObject):
+    def __init__(self, layer_manager, parent=None):
+        super().__init__(parent)
+        self.layer_manager = layer_manager
+
+    def validate_inputs(
+        self,
+        excavation_type: str,
+        feature_name: str,
+        attribute_type: str,
+        point_name: str,
+        branch_no: str,
+        drawing_name: str,
+        exclude_feature_id: Optional[int]
+    ) -> Tuple[bool, str, str, bool, bool]:
+        """
+        点情報編集の入力検証と重複チェックを行う
+        戻り値: (is_valid, message, status, is_feature_error, is_duplicate_error)
+        """
+        # 1. 遺構名の必須チェック
+        if excavation_type == ExcavationType.FEATURE.value and not feature_name:
+            return False, UILabels.STATUS_ERR_FEATURE_REQUIRED, "error", True, False
+
+        # 2. 点名の必須チェック
+        req_result = RequiredValidator(UIMessages.ERR_POINT_NAME_REQUIRED).validate(point_name)
+        if not req_result.is_valid:
+            return False, req_result.message, "error", False, True
+
+        # 3. 重複チェック
+        point_layer = getattr(self.layer_manager, "point_layer", None)
+        if point_layer and point_layer.isValid():
+            dup_result = DuplicateValidator(
+                lambda v: check_point_duplicate(
+                    point_layer, excavation_type, feature_name, v, branch_no, drawing_name, exclude_feature_id
+                ),
+                message=UILabels.STATUS_ERR_DUPLICATE
+            ).validate(point_name)
+
+            if not dup_result.is_valid:
+                return False, dup_result.message, "error", False, True
+
+        return True, "入力値で更新", "info", False, False

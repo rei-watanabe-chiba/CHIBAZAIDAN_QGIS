@@ -8,20 +8,11 @@ T-0045: CoreUIBuilder.build(spec, parent) turns a declarative PanelSpec
 FieldSpec, reusing UIStyleHelper's existing row/button/table helpers
 (ui/style.py) as the actual widget factories. This module is a thin layer
 over ui/style.py, not a replacement for it.
-
-Event wiring is deferred: building a panel never touches the caller's
-business-logic methods directly. Instead, each field that declares an
-on_click/on_change hook name registers a "pending connector" closure; the
-caller later attaches its real callback via ``BuiltPanel.bind(hook_name,
-callback)``. 
-T-0045 追加スコープ: ``BuiltPanel`` also exposes ``get_value()``/
-``set_value()``/``collect_values()`` for the value-bearing widget kinds
-(LINEEDIT_ROW/COMBOBOX_ROW/SEGMENTED_TOGGLE), so callers no longer need to
-keep raw widget references around just to read/write a field's value.
 """
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from qgis.gui import QgsFilterLineEdit
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -35,6 +26,9 @@ from qgis.PyQt.QtWidgets import (
     QTableWidget,
     QVBoxLayout,
     QWidget,
+    QCheckBox,        
+    QListWidget,      
+    QListWidgetItem,  
 )
 
 from ..style import UIStyleHelper
@@ -59,11 +53,6 @@ class BuiltPanel:
     hooks to caller-supplied callbacks.
     """
 
-    #: WidgetType kinds get_value()/set_value()/collect_values() know how to
-    #: read/write. TABLE and the pure-display/action kinds (BUTTON,
-    #: BUTTON_ROW, INFO_PANEL) are intentionally excluded (see
-    #: v2-coreui-plan.md's T-0045 追加スコープ note on TABLE's complex row
-    #: structure staying individually handled).
     _VALUE_WIDGET_TYPES = (
         WidgetType.LINEEDIT_ROW,
         WidgetType.COMBOBOX_ROW,
@@ -72,6 +61,8 @@ class BuiltPanel:
         WidgetType.SPINBOX_ROW,
         WidgetType.DOUBLE_SPINBOX_ROW,
         WidgetType.COLOR_BUTTON_ROW,
+        WidgetType.CHECKBOX_ROW,  
+        WidgetType.LIST_WIDGET,   
     )
 
     def __init__(
@@ -91,38 +82,19 @@ class BuiltPanel:
         self._field_types = field_types or {}
 
     def get(self, field_id: str) -> QWidget:
-        """Return the primary built widget registered under ``field_id``."""
         return self._field_widgets[field_id]
 
     def get_row(self, field_id: str) -> QWidget:
-        """Return the row container widget for ``field_id`` (what callers
-        show()/hide() to toggle an entire row, e.g. Tab1's row_edit_layer).
-        """
         return self._row_widgets[field_id]
 
     def get_buttons(self, field_id: str) -> List[QPushButton]:
-        """Return the button list for a SEGMENTED_TOGGLE field."""
         return self._buttons_lists[field_id]
 
     def bind(self, hook_name: str, callback: Callable) -> None:
-        """Attach ``callback`` to every pending connector registered under
-        ``hook_name`` (e.g. a FieldSpec's on_click/on_change, or a
-        ButtonDef's on_click). No-op if no field declared that hook name.
-        """
         for connector in self._pending_hooks.get(hook_name, []):
             connector(callback)
 
     def get_value(self, field_id: str) -> Any:
-        """Read the current value of a value-bearing field (LINEEDIT_ROW ->
-        raw ``.text()``, COMBOBOX_ROW -> ``.currentText()``,
-        SEGMENTED_TOGGLE -> checked segment index). Callers that need
-        stripped/validated text should post-process the returned value
-        themselves (get_value never strips/casts).
-
-        :raises KeyError: if ``field_id`` was never registered.
-        :raises NotImplementedError: if ``field_id``'s widget_type does not
-            carry a scalar value (BUTTON/BUTTON_ROW/TABLE/INFO_PANEL).
-        """
         widget_type = self._field_types[field_id]
         if widget_type == WidgetType.LINEEDIT_ROW:
             return self._field_widgets[field_id].text()
@@ -137,18 +109,22 @@ class BuiltPanel:
             return self._field_widgets[field_id].value()
         if widget_type == WidgetType.COLOR_BUTTON_ROW:
             return self._field_widgets[field_id]._color_hex
+            
+        if widget_type == WidgetType.CHECKBOX_ROW:
+            return [btn.text() for btn in self._buttons_lists[field_id] if btn.isChecked()]
+        if widget_type == WidgetType.LIST_WIDGET:
+            lw: QListWidget = self._field_widgets[field_id]
+            if lw.count() > 0 and (lw.item(0).flags() & Qt.ItemIsUserCheckable):
+                return [lw.item(i).text() for i in range(lw.count()) if lw.item(i).checkState() == Qt.Checked]
+            else:
+                selected = lw.selectedItems()
+                return selected[0].text() if selected else None
+                
         raise NotImplementedError(
             f"get_value() is not supported for field '{field_id}' (widget_type={widget_type})"
         )
 
     def set_value(self, field_id: str, value: Any) -> None:
-        """Write a value into a value-bearing field, symmetric with
-        ``get_value()``.
-
-        :raises KeyError: if ``field_id`` was never registered.
-        :raises NotImplementedError: if ``field_id``'s widget_type does not
-            carry a scalar value (BUTTON/BUTTON_ROW/TABLE/INFO_PANEL).
-        """
         widget_type = self._field_types[field_id]
         if widget_type == WidgetType.LINEEDIT_ROW:
             self._field_widgets[field_id].setText(value)
@@ -167,20 +143,37 @@ class BuiltPanel:
         if widget_type == WidgetType.COLOR_BUTTON_ROW:
             self._set_color_button(self._field_widgets[field_id], value)
             return
+            
+        if widget_type == WidgetType.CHECKBOX_ROW:
+            for btn in self._buttons_lists[field_id]:
+                btn.setChecked(btn.text() in value)
+            return
+        if widget_type == WidgetType.LIST_WIDGET:
+            lw: QListWidget = self._field_widgets[field_id]
+            if lw.count() > 0 and (lw.item(0).flags() & Qt.ItemIsUserCheckable):
+                lw.blockSignals(True)
+                for i in range(lw.count()):
+                    item = lw.item(i)
+                    item.setCheckState(Qt.Checked if item.text() in value else Qt.Unchecked)
+                lw.blockSignals(False)
+            else:
+                items = lw.findItems(str(value), Qt.MatchExactly)
+                if items:
+                    lw.setCurrentItem(items[0])
+                else:
+                    lw.clearSelection()
+            return
+            
         raise NotImplementedError(
             f"set_value() is not supported for field '{field_id}' (widget_type={widget_type})"
         )
 
     @staticmethod
     def _set_color_button(btn: QPushButton, color_hex: str) -> None:
-        """Shared helper for COLOR_BUTTON_ROW's initial style and set_value()."""
         btn._color_hex = color_hex
         btn.setStyleSheet(f"background-color: {color_hex}; color: white; border-radius: 4px;")
 
     def collect_values(self) -> Dict[str, Any]:
-        """Return ``{field_id: get_value(field_id)}`` for every registered
-        value-bearing field (see ``_VALUE_WIDGET_TYPES``).
-        """
         return {
             field_id: self.get_value(field_id)
             for field_id, widget_type in self._field_types.items()
@@ -188,14 +181,6 @@ class BuiltPanel:
         }
 
     def set_values(self, values: Dict[str, Any]) -> None:
-        """T-0048: symmetric bulk counterpart to ``collect_values()``. Calls
-        ``set_value(field_id, value)`` for each entry in ``values`` whose
-        ``field_id`` is a registered value-bearing field; unknown field_ids
-        (e.g. a settings-dict key with no corresponding panel field) are
-        silently ignored, so callers can pass a superset dict without
-        filtering it first (e.g. tab3_settings.py's mode-conditional scale
-        values).
-        """
         for field_id, value in values.items():
             widget_type = self._field_types.get(field_id)
             if widget_type in self._VALUE_WIDGET_TYPES:
@@ -203,10 +188,6 @@ class BuiltPanel:
 
 
 class CoreUIBuilder:
-    """Builds a PanelSpec into a real QWidget tree. Stateless: all state
-    lives in the returned BuiltPanel.
-    """
-
     @classmethod
     def build(cls, spec: PanelSpec, parent: Optional[QWidget] = None) -> BuiltPanel:
         container = QWidget(parent)
@@ -232,10 +213,6 @@ class CoreUIBuilder:
             row_widgets[f.field_id] = row_widget
             field_types[f.field_id] = f.widget_type
             if f.widget_type == WidgetType.ROW_GROUP:
-                # T-0048: also expose each ROW_GROUP sub-field's own
-                # field_id/widget_type so panel.get()/get_value()/
-                # set_value()/collect_values() can address it directly, as
-                # if it had been declared at the top level.
                 for sub in f.sub_fields:
                     field_types[sub.field_id] = sub.widget_type
             layout.addWidget(row_widget)
@@ -248,10 +225,6 @@ class CoreUIBuilder:
         for rule in spec.rules:
             rule.apply(panel)
         return panel
-
-    # -- per-WidgetType builders -------------------------------------------------
-    # Each returns the widget to place directly into the panel's QVBoxLayout
-    # (also used as the "row" for show()/hide() purposes).
 
     @staticmethod
     def _apply_button_style(button: QPushButton, style_variant: Optional[str]) -> None:
@@ -268,6 +241,44 @@ class CoreUIBuilder:
         return btn
 
     @classmethod
+    def _build_flex_row_unlimited(
+        cls, 
+        label_text: Optional[str], 
+        widgets_with_stretch: list, 
+        main_ratio: Tuple[int, int], 
+        row_height: Optional[int], 
+        parent: QWidget
+    ) -> QWidget:
+        """UIStyleHelper.build_flex_rowの代替。要素数制限(3個)をなくした内部レイアウトヘルパー"""
+        row_widget = QWidget(parent)
+        if row_height:
+            row_widget.setMinimumHeight(row_height)
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(8)
+
+        label_stretch, content_stretch = main_ratio
+        if label_text:
+            lbl = QLabel(label_text, row_widget)
+            row_layout.addWidget(lbl, label_stretch)
+        elif label_stretch > 0:
+            row_layout.addStretch(label_stretch)
+
+        content_widget = QWidget(row_widget)
+        content_layout = QHBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(8)
+
+        for widget, stretch in widgets_with_stretch:
+            if widget is not None:
+                content_layout.addWidget(widget, stretch)
+            else:
+                content_layout.addStretch(stretch)
+
+        row_layout.addWidget(content_widget, content_stretch)
+        return row_widget
+
+    @classmethod
     def _build_lineedit_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         label = QLabel(f.label, parent) if f.label else None
         edit = QgsFilterLineEdit(parent)
@@ -275,11 +286,6 @@ class CoreUIBuilder:
             edit.setPlaceholderText(f.placeholder)
         field_widgets[f.field_id] = edit
         if label is not None:
-            # T-0046: expose the row label under f"{field_id}.label" so
-            # callers that need to swap its text at runtime (e.g.
-            # start_dialog.py's new/existing-session label swap) can fetch
-            # it via panel.get(f"{field_id}.label") instead of keeping a
-            # separately-constructed QLabel reference around.
             field_widgets[f"{f.field_id}.label"] = label
         register_hook(f.on_change, lambda cb, edit=edit: edit.textChanged.connect(cb))
 
@@ -328,10 +334,6 @@ class CoreUIBuilder:
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
         if f.centered:
-            # T-0047: mirrors UIStyleHelper.build_centered_button_row's
-            # "stretch - buttons - stretch" pattern for modal dialogs' OK/
-            # キャンセル rows (dialogs.py); left-anchored rows (e.g. Tab1's
-            # rename_delete/transform_actions) leave f.centered False.
             row_layout.addStretch(1)
         for b in f.buttons:
             btn = cls._make_button(b, row, register_hook)
@@ -357,15 +359,6 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_radio_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build a labeled row of mutually-exclusive QRadioButtons.
-
-        T-0046: mirrors _build_segmented_toggle's index-based get_value/
-        set_value/on_change contract, but renders plain QRadioButtons in a
-        build_flex_row (label + one radio per option + trailing stretch)
-        instead of an iOS-style segmented button group, matching
-        start_dialog.py's pre-existing "セッション種別"/"グリッドモード" look.
-        """
-        label = QLabel(f.label, parent) if f.label else None
         group = QButtonGroup(parent)
         buttons: List[QRadioButton] = []
         content = []
@@ -385,21 +378,14 @@ class CoreUIBuilder:
 
         register_hook(f.on_change, connect_index_hook)
 
-        row = UIStyleHelper.build_flex_row(
-            label,
+        main_ratio = f.main_ratio or (UIConfig.MAIN_RATIO if f.label else (0, 10))
+        row = cls._build_flex_row_unlimited(
+            f.label,
             content,
-            # T-0048 fix: mirror _build_segmented_toggle's labelless
-            # main_ratio=(0, 10) so a RADIO_ROW declared without a label
-            # (e.g. tab3_settings.py's point_fill_toggle/halo_toggle) does
-            # not reserve an empty leading stretch sized as if a label were
-            # present. Labeled RADIO_ROWs (start_dialog.py's session_type/
-            # grid_mode, tab3's major_scale_mode/minor_scale_mode) keep the
-            # previous UIConfig.MAIN_RATIO behavior unchanged.
-            main_ratio=f.main_ratio or (UIConfig.MAIN_RATIO if f.label else (0, 10)),
+            main_ratio=main_ratio,
             row_height=f.row_height or UIConfig.ROW_HEIGHT,
+            parent=parent
         )
-        # Keep the QButtonGroup alive for the row's lifetime (it is parented
-        # to `parent`, not `row`, so nothing else retains a reference to it).
         row._button_group = group
         field_widgets[f.field_id] = row
         return row
@@ -427,23 +413,11 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_spinbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build a labeled row wrapping a single UIStyleHelper.create_spinbox()
-        QSpinBox (T-0047; e.g. dialogs.py's PointNameEntryDialog 点名 numeric
-        input), analogous to _build_lineedit_row but for an int-ranged value
-        instead of free text.
-        """
         spin = UIStyleHelper.create_spinbox(f.spin_min, f.spin_max, f.spin_default, parent)
         spin.setEnabled(f.enabled)
         field_widgets[f.field_id] = spin
         register_hook(f.on_change, lambda cb, spin=spin: spin.valueChanged.connect(cb))
         if f.label_width is not None:
-            # T-0048 (人手確認フィードバック対応): tab3_settings.py's lbl_size
-            # needs to line up with the DOUBLE_SPINBOX_ROW lbl_offset beside
-            # it in the same ROW_GROUP, so a fixed label_width switches this
-            # to the same build_form_row() layout DOUBLE_SPINBOX_ROW/
-            # COLOR_BUTTON_ROW use, instead of build_flex_row's stretch-ratio
-            # layout. Screens that never set label_width (e.g. dialogs.py's
-            # PointNameEntryDialog) keep the original build_flex_row look.
             return UIStyleHelper.build_form_row(f.label or "", spin, label_width=f.label_width)
         label = QLabel(f.label, parent) if f.label else None
         return UIStyleHelper.build_flex_row(
@@ -455,21 +429,12 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_section_header(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build a non-interactive bold section-header label (T-0048; e.g.
-        tab3_settings.py's "基準点"/"遺物点"/"ラベル"/"表示縮尺" separators).
-        """
         header = UIStyleHelper.build_section_header(f.label or "")
         field_widgets[f.field_id] = header
         return header
 
     @classmethod
     def _build_double_spinbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build a compact label+QDoubleSpinBox row via
-        UIStyleHelper.build_form_row() (T-0048; e.g. tab3_settings.py's
-        サイズ/線幅/間隔 numeric inputs), analogous to _build_spinbox_row but
-        for float values and the denser build_form_row layout tab3 already
-        used prior to CoreUI adoption.
-        """
         spin = QDoubleSpinBox(parent)
         spin.setRange(f.dspin_min, f.dspin_max)
         spin.setSingleStep(f.dspin_step)
@@ -481,12 +446,6 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_color_button_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build a compact label+color-swatch QPushButton row via
-        UIStyleHelper.build_form_row() (T-0048; e.g. tab3_settings.py's 線色
-        pickers). The button only opens the picker (on_click); the resulting
-        color is tracked on the button itself (``btn._color_hex``) and read/
-        written via BuiltPanel.get_value()/set_value().
-        """
         btn = QPushButton("", parent)
         BuiltPanel._set_color_button(btn, f.color_default)
         field_widgets[f.field_id] = btn
@@ -495,13 +454,6 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_row_group(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Lay ``f.sub_fields`` out side by side in one QHBoxLayout row
-        (T-0048; e.g. tab3_settings.py's paired サイズ+線幅 spinboxes, 線色+
-        塗り toggle, and グリッド常時/指定 radio + threshold spinbox rows).
-        Each sub-field is built via its own normal WidgetType builder and
-        registered under its own field_id, exactly as if it were declared
-        at the top level of the PanelSpec.
-        """
         row = QWidget(parent)
         row_layout = QHBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
@@ -513,13 +465,6 @@ class CoreUIBuilder:
 
     @classmethod
     def _build_spacer(cls, f, parent, field_widgets, buttons_lists, register_hook):
-        """Build an empty, value-less QWidget placeholder used as a stretch
-        spacer within a ROW_GROUP's sub_fields (T-0048 人手確認フィードバック
-        対応; e.g. tab3_settings.py's ref_row2, pairing a 線色 COLOR_BUTTON_ROW
-        with a same-width SPACER so the row's used half lines up with the
-        サイズ+線幅 row above it). Registered in field_widgets like any other
-        field, but intentionally excluded from _VALUE_WIDGET_TYPES.
-        """
         spacer = QWidget(parent)
         field_widgets[f.field_id] = spacer
         return spacer
@@ -554,11 +499,64 @@ class CoreUIBuilder:
         field_widgets[f.field_id] = frame
         return frame
 
+    @classmethod
+    def _build_checkbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
+        buttons: List[QCheckBox] = []
+        content = []
+        for i, option in enumerate(f.options):
+            cb = QCheckBox(option, parent)
+            buttons.append(cb)
+            content.append((cb, 1))
+        content.append((None, 1))
+        
+        if f.default_indices:
+            for idx in f.default_indices:
+                if 0 <= idx < len(buttons):
+                    buttons[idx].setChecked(True)
+                    
+        buttons_lists[f.field_id] = buttons
 
-# NOTE: populated after class definition (not inside the class body) so that
-# each entry is CoreUIBuilder's already-bound classmethod (cls fixed to
-# CoreUIBuilder), letting CoreUIBuilder.build() call `builder_fn(f, ...)`
-# without re-passing cls itself.
+        def connect_hook(cb_hook, buttons=buttons):
+            for idx, btn in enumerate(buttons):
+                btn.toggled.connect(lambda checked, idx=idx, cb_hook=cb_hook: cb_hook(idx, checked))
+
+        register_hook(f.on_change, connect_hook)
+
+        main_ratio = f.main_ratio or (UIConfig.MAIN_RATIO if f.label else (0, 10))
+        row = cls._build_flex_row_unlimited(
+            f.label,
+            content,
+            main_ratio=main_ratio,
+            row_height=f.row_height or UIConfig.ROW_HEIGHT,
+            parent=parent
+        )
+        field_widgets[f.field_id] = row
+        return row
+
+    @classmethod
+    def _build_list_widget(cls, f, parent, field_widgets, buttons_lists, register_hook):
+        list_widget = QListWidget(parent)
+        if f.list_min_height:
+            list_widget.setMinimumHeight(f.list_min_height)
+        
+        if f.options:
+            for i, opt in enumerate(f.options):
+                item = QListWidgetItem(opt, list_widget)
+                if f.checkable:
+                    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                    item.setCheckState(Qt.Checked if i in f.default_indices else Qt.Unchecked)
+                    
+        field_widgets[f.field_id] = list_widget
+        
+        if f.checkable:
+            register_hook(f.on_change, lambda cb, lw=list_widget: lw.itemChanged.connect(cb))
+        else:
+            list_widget.setSelectionMode(QListWidget.SingleSelection)
+            register_hook(f.on_change, lambda cb, lw=list_widget: lw.itemSelectionChanged.connect(cb))
+            
+        return list_widget
+
+
 CoreUIBuilder._BUILDERS = {
     WidgetType.LINEEDIT_ROW: CoreUIBuilder._build_lineedit_row,
     WidgetType.COMBOBOX_ROW: CoreUIBuilder._build_combobox_row,
@@ -574,4 +572,6 @@ CoreUIBuilder._BUILDERS = {
     WidgetType.COLOR_BUTTON_ROW: CoreUIBuilder._build_color_button_row,
     WidgetType.ROW_GROUP: CoreUIBuilder._build_row_group,
     WidgetType.SPACER: CoreUIBuilder._build_spacer,
+    WidgetType.CHECKBOX_ROW: CoreUIBuilder._build_checkbox_row,   
+    WidgetType.LIST_WIDGET: CoreUIBuilder._build_list_widget,     
 }
