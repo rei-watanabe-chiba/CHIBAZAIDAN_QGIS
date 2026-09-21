@@ -6,7 +6,7 @@
 Tab 1 (画像管理・事前配置) のUIイベントを受容し、ビジネスロジック（画像操作、基準点設定、
 座標変換、レイヤ出力）を処理するController層です。
 View層からは BuiltPanel やコールバックを注入（DI）されることで直接イベントをバインドし、
-循環参照（Circular Import）を防ぎます。
+循環参照を防ぎます。
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
@@ -31,6 +31,7 @@ from ..logic.core import (
 )
 from ..ui.constants import UILabels, UIDialogTitles, UIMessages
 from ..ui.dialogs import GridInputDialog
+from ..ui.core.state import ChangeTab1ModeAction, SetGeorefStateAction
 from ..ui.core.validators import (
     RequiredValidator,
     RegexValidator,
@@ -47,18 +48,16 @@ class GeorefLogic(QObject):
     INVALID_CHARS_PATTERN = r'[\\/:*?"<>|]'
     WORLD_FILE_EXTENSIONS = (".tfw", ".jgw", ".pgw", ".bpw", ".wld")
 
-    def __init__(self, layer_manager, layers_dict, iface, parent=None):
+    def __init__(self, state_store, layer_manager, layers_dict, iface, parent=None):
         super().__init__(parent)
+        self.state_store = state_store
         self.layer_manager = layer_manager
         self.layers_dict = layers_dict
         self.iface = iface
         self.point_layer = layers_dict.get("point_layer")
         self.parent_widget = parent
 
-        self.current_copied_image_path: Optional[str] = None
-        self.confirmed_layer_name: Optional[str] = None
-        self.calculated_affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
-        self.ref_points_data: List[Dict[str, Any]] = []
+        self._is_modifying_layer = False  # リネーム・削除時の連鎖ポップアップ抑止フラグ
 
         # コールバック群 (DI)
         self.get_image_dialog_cb = lambda: None
@@ -76,7 +75,6 @@ class GeorefLogic(QObject):
         self.transform_panel: Optional[BuiltPanel] = None
 
     def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
-        """View層から必要な情報取得メソッドやヘルパーをバインドする"""
         self.get_image_dialog_cb = callbacks.get("get_image_dialog", self.get_image_dialog_cb)
         self.is_focus_mode_active_cb = callbacks.get("is_focus_mode_active", self.is_focus_mode_active_cb)
         self.update_symbology_opacity_cb = callbacks.get("update_symbology_opacity", self.update_symbology_opacity_cb)
@@ -86,7 +84,6 @@ class GeorefLogic(QObject):
         self.busy_interaction_guard_cb = callbacks.get("busy_interaction_guard", self.busy_interaction_guard_cb)
 
     def bind_ui_panels(self, info_panel: BuiltPanel, mode_panel: BuiltPanel, image_panel: BuiltPanel, transform_panel: BuiltPanel) -> None:
-        """Viewから BuiltPanel インスタンスを受け取り、Controller自身でシグナルをバインドする"""
         self.info_panel = info_panel
         self.mode_panel = mode_panel
         self.image_panel = image_panel
@@ -102,35 +99,82 @@ class GeorefLogic(QObject):
         self.transform_panel.bind("transform_clicked", self._on_transform_clicked)
         self.transform_panel.bind("export_layer_clicked", self._on_export_layer_clicked)
 
-        # Tab 1 の初期モードを適用する (0: 新規追加)[cite: 20]
-        self._on_tab1_mode_changed(0)
-
     # =========================================================================
-    # モード切り替え & 状態管理
+    # 状態の同期 (一方向データフローの受け口)
     # =========================================================================
 
-    def _on_tab1_mode_changed(self, mode_index: int) -> None:
-        if mode_index == 0:
-            self.image_panel.get_row("image_path").show()
-            self.image_panel.get_row("edit_layer").hide()
-            self.image_panel.get_row("rename_delete").hide()
-            self.image_panel.set_value("image_path", "")
-            self.image_panel.set_value("image_name", "")
-            self.confirmed_layer_name = None
-            self.ref_points_data.clear()
-            self._refresh_ref_points_table_and_markers()
-        else:
-            self.image_panel.get_row("image_path").hide()
-            self.image_panel.get_row("edit_layer").show()
-            self.image_panel.get_row("rename_delete").show()
-            self._refresh_edit_layer_combo()
-            self._on_edit_layer_changed()
+    def on_state_changed(self, new_state: Any, diff: Dict[str, Any]) -> None:
+        """UIStateStoreの変更を検知し、Tab1のUIを安全に同期する"""
+        if not self.image_panel:
+            return
 
-        self._update_edit_mode_button_states()
+        # 1. モード変更時のUI表示・非表示切り替え
+        if "tab1_mode" in diff:
+            is_new = (new_state.tab1_mode == "new")
+            self.image_panel.get_row("image_path").setVisible(is_new)
+            self.image_panel.get_row("edit_layer").setVisible(not is_new)
+            self.image_panel.get_row("rename_delete").setVisible(not is_new)
+            
+            btn_confirm = self.image_panel.get("confirm_image")
+            if is_new:
+                btn_confirm.setText("基準点設置")
+            else:
+                btn_confirm.setText("プレビュー再表示")
+            
+            if not is_new:
+                # 編集削除モード: コンボボックスを再構築し、最初のアイテムを選択
+                self._is_modifying_layer = True
+                try:
+                    self._refresh_edit_layer_combo()
+                    combo = self.image_panel.get("edit_layer")
+                    if combo.count() > 0:
+                        # 強制的に先頭を選択させ、Stateを更新する
+                        if combo.currentIndex() != 0:
+                            combo.setCurrentIndex(0)
+                        else:
+                            self._on_edit_layer_changed()
+                    else:
+                        self.state_store.dispatch(SetGeorefStateAction(
+                            image_path="", layer_name="", clear_ref_points=True, affine_params=None
+                        ))
+                finally:
+                    self._is_modifying_layer = False
 
-    def _update_edit_mode_button_states(self) -> None:
-        mode_buttons = self.mode_panel.get_buttons("tab1_mode")
-        if mode_buttons[1].isChecked():
+                # 編集削除モードに切り替えた直後、図面が存在すれば自動プレビューを表示
+                latest_state = self.state_store.state
+                if latest_state.current_copied_image_path:
+                    self._show_preview_if_needed()
+            else:
+                # 新規モード: 状態をクリア
+                self.state_store.dispatch(SetGeorefStateAction(
+                    image_path="", layer_name="", clear_ref_points=True, affine_params=None
+                ))
+
+            self._update_edit_mode_button_states(new_state)
+
+        # 2. パスとレイヤ名の同期 (blockSignalsによるループ防止)
+        if "current_copied_image_path" in diff or "confirmed_layer_name" in diff:
+            path = new_state.current_copied_image_path or ""
+            name = new_state.confirmed_layer_name or ""
+            
+            w_path = self.image_panel.get("image_path")
+            w_path.blockSignals(True)
+            w_path.setText(path)
+            w_path.blockSignals(False)
+
+            w_name = self.image_panel.get("image_name")
+            w_name.blockSignals(True)
+            w_name.setText(name)
+            w_name.blockSignals(False)
+
+        # 3. 基準点テーブルやボタンの同期
+        keys_to_check = ("ref_points_data", "calculated_affine_params", "current_copied_image_path", "confirmed_layer_name")
+        if any(k in diff for k in keys_to_check):
+            self._refresh_ref_points_table_and_markers(new_state)
+            self._update_ref_points_status(new_state)
+
+    def _update_edit_mode_button_states(self, state) -> None:
+        if state.tab1_mode == "edit":
             has_images = bool(self.layer_manager.load_image_metadata())
             self.image_panel.get("rename_layer").setEnabled(has_images)
             self.image_panel.get("delete_layer").setEnabled(has_images)
@@ -140,36 +184,76 @@ class GeorefLogic(QObject):
 
     def _refresh_edit_layer_combo(self) -> None:
         meta = self.layer_manager.load_image_metadata()
+        combo = self.image_panel.get("edit_layer")
         UIStyleHelper.repopulate_combo_box(
-            self.image_panel.get("edit_layer"), list(meta.keys()), preserve_current=False
+            combo, list(meta.keys()), preserve_current=False
         )
+        if self.state_store.state.confirmed_layer_name in meta:
+            idx = combo.findText(self.state_store.state.confirmed_layer_name)
+            if idx >= 0:
+                combo.blockSignals(True)
+                combo.setCurrentIndex(idx)
+                combo.blockSignals(False)
 
-    def _on_edit_layer_changed(self) -> None:
+    # =========================================================================
+    # モード切り替え & 状態管理 (Action Dispatch)
+    # =========================================================================
+
+    def _on_tab1_mode_changed(self, mode_index: int) -> None:
+        mode = "new" if mode_index == 0 else "edit"
+        if self.state_store.state.tab1_mode != mode:
+            self.state_store.dispatch(ChangeTab1ModeAction(mode))
+
+    def _on_edit_layer_changed(self, *args) -> None:
         layer_name = self.image_panel.get_value("edit_layer")
         if not layer_name:
-            self.image_panel.set_value("image_name", "")
-            self.ref_points_data.clear()
-            self.current_copied_image_path = None
-            self._refresh_ref_points_table_and_markers()
+            self.state_store.dispatch(SetGeorefStateAction(
+                image_path="", layer_name="", clear_ref_points=True, affine_params=None
+            ))
             return
 
-        self.image_panel.set_value("image_name", layer_name)
-        self.confirmed_layer_name = layer_name
-        
         meta = self.layer_manager.load_image_metadata()
         layer_meta = meta.get(layer_name, {})
-        self.current_copied_image_path = layer_meta.get("file_path", "")
+        image_path = layer_meta.get("file_path", "")
+        affine_params = layer_meta.get("affine_params")
+        if affine_params is not None:
+            affine_params = tuple(affine_params)
         
-        self.ref_points_data = []
+        ref_points = []
         for r in layer_meta.get("ref_points", []):
-            self.ref_points_data.append({
+            ref_points.append({
                 "name": r.get("name", ""),
                 "pixel_x": r.get("pixel_x", 0.0),
                 "pixel_y": r.get("pixel_y", 0.0),
                 "real_x": r.get("real_x", 0.0),
                 "real_y": r.get("real_y", 0.0),
             })
-        self._refresh_ref_points_table_and_markers()
+            
+        self.state_store.dispatch(SetGeorefStateAction(
+            image_path=image_path,
+            layer_name=layer_name,
+            ref_points=ref_points,
+            affine_params=affine_params
+        ))
+        
+        # ユーザーによる手動操作（リネーム・削除等のプログラム処理中ではない）の場合、プレビューを自動表示
+        if not self._is_modifying_layer and image_path:
+            self._show_preview_if_needed()
+
+    def _show_preview_if_needed(self) -> None:
+        """安全にプレビューダイアログを起動またはアクティブにする"""
+        state = self.state_store.state
+        if not state.current_copied_image_path or not os.path.isfile(state.current_copied_image_path):
+            return
+
+        image_dialog = self.get_image_dialog_cb()
+        if image_dialog and image_dialog.raster_layer is not None:
+            image_dialog.set_ref_points_data(state.ref_points_data)
+            image_dialog.show()
+            image_dialog.raise_()
+            image_dialog.activateWindow()
+        else:
+            self._create_preview_canvas(state.current_copied_image_path)
 
     # =========================================================================
     # レイヤの削除 & リネーム
@@ -189,7 +273,6 @@ class GeorefLogic(QObject):
         if reply != QMessageBox.Yes:
             return
             
-        # Warning if points exist for this drawing
         has_points = False
         if self.point_layer and self.point_layer.isValid() and "drawing_name" in self.point_layer.fields().names():
             for f in self.point_layer.getFeatures():
@@ -246,9 +329,25 @@ class GeorefLogic(QObject):
             UIMessages.MSG_DELETE_LAYER_SUCCESS_TITLE,
             UIMessages.MSG_DELETE_LAYER_SUCCESS.format(name=layer_name),
         )
-        self._refresh_edit_layer_combo()
-        self._on_edit_layer_changed()
-        self._update_edit_mode_button_states()
+
+        # 削除後の自動選択で意図しないプレビューがポップアップするのを防ぐ
+        self._is_modifying_layer = True
+        try:
+            self._refresh_edit_layer_combo()
+            combo = self.image_panel.get("edit_layer")
+            if combo.count() > 0:
+                if combo.currentIndex() != 0:
+                    combo.setCurrentIndex(0)
+                else:
+                    self._on_edit_layer_changed()
+            else:
+                self.state_store.dispatch(SetGeorefStateAction(
+                    image_path="", layer_name="", clear_ref_points=True, affine_params=None
+                ))
+        finally:
+            self._is_modifying_layer = False
+
+        self._update_edit_mode_button_states(self.state_store.state)
 
     def _on_rename_layer_clicked(self) -> None:
         old_name = self.image_panel.get_value("edit_layer")
@@ -290,20 +389,24 @@ class GeorefLogic(QObject):
 
             meta[new_name] = meta.pop(old_name)
             self.layer_manager.save_image_metadata(meta)
-            self.confirmed_layer_name = new_name
-            self.current_copied_image_path = meta[new_name].get("file_path", self.current_copied_image_path)
+            
+            image_path = meta[new_name].get("file_path", self.state_store.state.current_copied_image_path)
+            self.state_store.dispatch(SetGeorefStateAction(layer_name=new_name, image_path=image_path))
 
             self.layer_manager.rename_drawing_name(old_name, new_name)
 
-            self._refresh_edit_layer_combo()
-            index = self.image_panel.get("edit_layer").findText(new_name)
-            if index >= 0:
-                self.image_panel.get("edit_layer").setCurrentIndex(index)
-            self._on_edit_layer_changed()
-
-            self.info_panel.get("tab1_info.line1").setText(
-                UILabels.TAB1_INFO_IMAGE_REF.format(name=new_name, count=len(self.ref_points_data))
-            )
+            # リネーム後のコンボボックス再構築時に意図しないプレビューポップアップを防ぐ
+            self._is_modifying_layer = True
+            try:
+                self._refresh_edit_layer_combo()
+                combo = self.image_panel.get("edit_layer")
+                idx = combo.findText(new_name)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+                else:
+                    self._on_edit_layer_changed()
+            finally:
+                self._is_modifying_layer = False
 
             if self.is_focus_mode_active_cb():
                 self.update_symbology_opacity_cb()
@@ -330,15 +433,17 @@ class GeorefLogic(QObject):
         )
         if filepath:
             norm_path = os.path.normpath(filepath)
-            self.image_panel.set_value("image_path", norm_path)
-            base_name, ext = os.path.splitext(os.path.basename(norm_path))
-            self.image_panel.set_value("image_name", base_name)
-            self.confirmed_layer_name = None
+            base_name, _ = os.path.splitext(os.path.basename(norm_path))
+            self.state_store.dispatch(SetGeorefStateAction(
+                image_path=norm_path,
+                layer_name=base_name,
+                clear_ref_points=True,
+                affine_params=None
+            ))
 
     def _on_confirm_image_clicked(self) -> None:
-        is_edit_mode = self.mode_panel.get_buttons("tab1_mode")[1].isChecked()
-
-        if is_edit_mode:
+        state = self.state_store.state
+        if state.tab1_mode == "edit":
             self._on_setup_ref_points_clicked()
             return
 
@@ -375,29 +480,23 @@ class GeorefLogic(QObject):
             self.image_panel.get("image_path").setFocus()
             return
 
-        self.confirmed_layer_name = layer_name
-        self.current_copied_image_path = src_path
-
-        self.ref_points_data.clear()
-        self.calculated_affine_params = None
-        self._refresh_ref_points_table_and_markers()
+        self.state_store.dispatch(SetGeorefStateAction(
+            layer_name=layer_name,
+            image_path=src_path,
+            clear_ref_points=True,
+            affine_params=None
+        ))
         
+        # State更新直後の状態を取得してダイアログを構築
+        current_state = self.state_store.state
         image_dialog = self.get_image_dialog_cb()
-        if image_dialog:
-            image_dialog.clear_markers()
-            image_dialog.set_ref_points_data([])
-
-        self.info_panel.get("tab1_info.line1").setText(
-            UILabels.TAB1_INFO_IMAGE_REF.format(name=layer_name, count=len(self.ref_points_data))
-        )
-
         if image_dialog and image_dialog.raster_layer is not None:
-            image_dialog.set_ref_points_data(self.ref_points_data)
+            image_dialog.set_ref_points_data(current_state.ref_points_data)
             image_dialog.show()
             image_dialog.raise_()
             image_dialog.activateWindow()
         else:
-            self._create_preview_canvas(self.current_copied_image_path)
+            self._create_preview_canvas(src_path)
 
     def _create_preview_canvas(self, image_path: str) -> bool:
         success, msg, raster_layer = self.layer_manager.load_preview_raster(image_path)
@@ -410,7 +509,7 @@ class GeorefLogic(QObject):
             image_dialog.setup_raster(
                 raster_layer,
                 self._on_preview_canvas_point_clicked,
-                self.ref_points_data,
+                self.state_store.state.ref_points_data,
             )
             image_dialog.show()
             image_dialog.raise_()
@@ -424,23 +523,25 @@ class GeorefLogic(QObject):
             image_dialog.clean_up()
 
     def _on_setup_ref_points_clicked(self) -> None:
-        if not self.current_copied_image_path or not os.path.isfile(self.current_copied_image_path):
+        state = self.state_store.state
+        if not state.current_copied_image_path or not os.path.isfile(state.current_copied_image_path):
             QMessageBox.information(self.parent_widget, UIMessages.MSG_TITLE_INFO, UIMessages.MSG_CONFIRM_IMAGE_FIRST)
             return
 
         image_dialog = self.get_image_dialog_cb()
         if image_dialog and image_dialog.raster_layer is not None:
-            image_dialog.set_ref_points_data(self.ref_points_data)
+            image_dialog.set_ref_points_data(state.ref_points_data)
             image_dialog.show()
             image_dialog.raise_()
             image_dialog.activateWindow()
         else:
-            self._create_preview_canvas(self.current_copied_image_path)
+            self._create_preview_canvas(state.current_copied_image_path)
 
     @pyqtSlot(float, float)
     def _on_preview_canvas_point_clicked(self, pixel_x: float, pixel_y: float) -> None:
         snapped_index: Optional[int] = None
         image_dialog = self.get_image_dialog_cb()
+        ref_points = self.state_store.state.ref_points_data
 
         if image_dialog and image_dialog.raster_layer and image_dialog.georef_tool:
             tool = image_dialog.georef_tool
@@ -455,7 +556,7 @@ class GeorefLogic(QObject):
                 click_screen = tool.toCanvasCoordinates(QgsPointXY(click_map_x, click_map_y))
 
                 min_dist = float("inf")
-                for idx, rdata in enumerate(self.ref_points_data):
+                for idx, rdata in enumerate(ref_points):
                     rx = float(rdata["pixel_x"])
                     ry = float(rdata["pixel_y"])
                     r_map_x = extent.xMinimum() + (rx / w) * extent.width()
@@ -467,8 +568,8 @@ class GeorefLogic(QObject):
                         snapped_index = idx
 
         if snapped_index is not None:
-            existing_point = self.ref_points_data[snapped_index]
-            other_names = [r["name"] for i, r in enumerate(self.ref_points_data) if i != snapped_index]
+            existing_point = dict(ref_points[snapped_index])
+            other_names = [r["name"] for i, r in enumerate(ref_points) if i != snapped_index]
             dlg = GridInputDialog(
                 self.layer_manager,
                 existing_point=existing_point,
@@ -477,22 +578,23 @@ class GeorefLogic(QObject):
             )
             if dlg.exec_() == QDialog.Accepted:
                 if dlg.dialog_action == "delete":
-                    del self.ref_points_data[snapped_index]
-                    self.calculated_affine_params = None
-                    self._refresh_ref_points_table_and_markers()
+                    new_refs = list(ref_points)
+                    del new_refs[snapped_index]
+                    self.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
                 elif dlg.dialog_action == "confirm":
-                    existing_point["name"] = dlg.result_grid_name
-                    existing_point["real_x"] = dlg.result_real_x
-                    existing_point["real_y"] = dlg.result_real_y
-                    self.calculated_affine_params = None
-                    self._refresh_ref_points_table_and_markers()
+                    new_refs = list(ref_points)
+                    new_refs[snapped_index] = dict(existing_point)
+                    new_refs[snapped_index]["name"] = dlg.result_grid_name
+                    new_refs[snapped_index]["real_x"] = dlg.result_real_x
+                    new_refs[snapped_index]["real_y"] = dlg.result_real_y
+                    self.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
             return
 
-        if len(self.ref_points_data) >= 4:
+        if len(ref_points) >= 4:
             QMessageBox.information(self.parent_widget, UIMessages.MSG_TITLE_LIMIT, UIMessages.MSG_LIMIT_REFS)
             return
 
-        other_names = [r["name"] for r in self.ref_points_data]
+        other_names = [r["name"] for r in ref_points]
         dlg = GridInputDialog(
             self.layer_manager,
             existing_point=None,
@@ -507,16 +609,17 @@ class GeorefLogic(QObject):
                 "real_x": dlg.result_real_x,
                 "real_y": dlg.result_real_y,
             }
-            self.ref_points_data.append(pt_entry)
-            self.calculated_affine_params = None
-            self._refresh_ref_points_table_and_markers()
+            new_refs = list(ref_points)
+            new_refs.append(pt_entry)
+            self.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
 
     # =========================================================================
     # 基準点テーブル & 状態管理
     # =========================================================================
 
     def _on_ref_table_cell_changed(self, row: int, column: int) -> None:
-        if row >= len(self.ref_points_data):
+        ref_points = self.state_store.state.ref_points_data
+        if row >= len(ref_points):
             return
 
         table_ref_points = self.image_panel.get("ref_points_table")
@@ -539,34 +642,33 @@ class GeorefLogic(QObject):
                 except ValueError:
                     sy = None
 
+            new_refs = [dict(r) for r in ref_points]
             if sx is not None and sy is not None:
                 math_x, math_y = from_survey_coords(sx, sy)
-                self.ref_points_data[row]["real_x"] = math_x
-                self.ref_points_data[row]["real_y"] = math_y
+                new_refs[row]["real_x"] = math_x
+                new_refs[row]["real_y"] = math_y
             else:
-                self.ref_points_data[row]["real_x"] = None
-                self.ref_points_data[row]["real_y"] = None
+                new_refs[row]["real_x"] = None
+                new_refs[row]["real_y"] = None
 
-            self.calculated_affine_params = None
-            self._update_ref_points_status()
+            self.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
 
-    def _update_ref_points_status(self) -> None:
-        count = len(self.ref_points_data)
+    def _update_ref_points_status(self, state) -> None:
+        count = len(state.ref_points_data)
         fname = (
-            self.confirmed_layer_name if self.confirmed_layer_name
-            else (os.path.basename(self.current_copied_image_path) if self.current_copied_image_path else UILabels.UNLOADED)
+            state.confirmed_layer_name if state.confirmed_layer_name
+            else (os.path.basename(state.current_copied_image_path) if state.current_copied_image_path else UILabels.UNLOADED)
         )
         self.info_panel.get("tab1_info.line1").setText(UILabels.TAB1_INFO_IMAGE_REF.format(name=fname, count=count))
         self.info_panel.get("tab1_info.line3_6").setText("")
 
         all_coords_valid = False
         if count >= 2:
-            all_coords_valid = all(r["real_x"] is not None and r["real_y"] is not None for r in self.ref_points_data)
+            all_coords_valid = all(r["real_x"] is not None and r["real_y"] is not None for r in state.ref_points_data)
 
         if count < 2:
             self.transform_panel.get("transform").setEnabled(False)
             self.transform_panel.get("export_layer").setEnabled(False)
-            self.calculated_affine_params = None
             UIStyleHelper.update_status_panel(
                 self.info_panel.get("tab1_info"), self.info_panel.get("tab1_info.line2"),
                 UILabels.STATUS_NEED_MORE_REFS.format(count=count), status_type="warning"
@@ -574,7 +676,6 @@ class GeorefLogic(QObject):
         elif not all_coords_valid:
             self.transform_panel.get("transform").setEnabled(False)
             self.transform_panel.get("export_layer").setEnabled(False)
-            self.calculated_affine_params = None
             UIStyleHelper.update_status_panel(
                 self.info_panel.get("tab1_info"), self.info_panel.get("tab1_info.line2"),
                 UILabels.STATUS_INPUT_COORDS.format(count=count), status_type="info"
@@ -583,7 +684,7 @@ class GeorefLogic(QObject):
             self.transform_panel.get("transform").setEnabled(True)
             mode_str = UILabels.TRANSFORM_HELMERT if count == 2 else UILabels.TRANSFORM_AFFINE.format(count=count)
             
-            if self.calculated_affine_params is None:
+            if state.calculated_affine_params is None:
                 self.transform_panel.get("export_layer").setEnabled(False)
                 UIStyleHelper.update_status_panel(
                     self.info_panel.get("tab1_info"), self.info_panel.get("tab1_info.line2"),
@@ -595,27 +696,28 @@ class GeorefLogic(QObject):
     def _on_delete_selected_ref_point(self) -> None:
         table_ref_points = self.image_panel.get("ref_points_table")
         current_row = table_ref_points.currentRow()
-        if current_row < 0 or current_row >= len(self.ref_points_data):
+        ref_points = self.state_store.state.ref_points_data
+        
+        if current_row < 0 or current_row >= len(ref_points):
             QMessageBox.information(self.parent_widget, UIMessages.MSG_TITLE_INFO, UIMessages.MSG_SELECT_REF_ROW)
             return
 
-        del self.ref_points_data[current_row]
-        self.calculated_affine_params = None
-        self._refresh_ref_points_table_and_markers()
+        new_refs = list(ref_points)
+        del new_refs[current_row]
+        self.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
 
     def _on_clear_all_refs(self) -> None:
-        self.ref_points_data.clear()
-        self.calculated_affine_params = None
-        self._refresh_ref_points_table_and_markers()
+        self.state_store.dispatch(SetGeorefStateAction(clear_ref_points=True, affine_params=None))
 
-    def _refresh_ref_points_table_and_markers(self) -> None:
+    def _refresh_ref_points_table_and_markers(self, state) -> None:
+        ref_points = state.ref_points_data
         image_dialog = self.get_image_dialog_cb()
         if image_dialog:
             image_dialog.clear_markers()
-            image_dialog.set_ref_points_data(self.ref_points_data)
+            image_dialog.set_ref_points_data(ref_points)
 
         def _build_row(i: int):
-            rdata = self.ref_points_data[i]
+            rdata = ref_points[i]
             name_item = QTableWidgetItem(rdata["name"])
             name_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             pix_item = QTableWidgetItem(f"({rdata['pixel_x']:.1f}, {rdata['pixel_y']:.1f})")
@@ -635,22 +737,22 @@ class GeorefLogic(QObject):
             return (name_item, pix_item, QTableWidgetItem(rx_str), QTableWidgetItem(ry_str))
 
         table_ref_points = self.image_panel.get("ref_points_table")
-        UIStyleHelper.rebuild_table_rows(table_ref_points, len(self.ref_points_data), _build_row)
-        self._update_ref_points_status()
+        UIStyleHelper.rebuild_table_rows(table_ref_points, len(ref_points), _build_row)
 
     # =========================================================================
     # 座標変換 & レイヤ出力
     # =========================================================================
 
     def _on_transform_clicked(self) -> None:
-        if len(self.ref_points_data) < 2:
+        state = self.state_store.state
+        if len(state.ref_points_data) < 2:
             QMessageBox.warning(self.parent_widget, UIMessages.ERR_TITLE_GENERIC, UIMessages.ERR_MIN_2_REFS)
             return
 
         local_pts: List[Tuple[float, float]] = []
         real_pts: List[Tuple[float, float]] = []
 
-        for rdata in self.ref_points_data:
+        for rdata in state.ref_points_data:
             if rdata["real_x"] is None or rdata["real_y"] is None:
                 QMessageBox.warning(self.parent_widget, UIMessages.ERR_TITLE_INPUT, UIMessages.ERR_INPUT_REAL_COORDS.format(name=rdata["name"]))
                 return
@@ -661,8 +763,9 @@ class GeorefLogic(QObject):
         if affine_params is None:
             return
 
-        self.calculated_affine_params = affine_params
-        rotation_deg, aspect_ratio_pct = evaluate_residuals(self.ref_points_data, affine_params)
+        self.state_store.dispatch(SetGeorefStateAction(affine_params=affine_params))
+        
+        rotation_deg, aspect_ratio_pct = evaluate_residuals(state.ref_points_data, affine_params)
         mode_str = UILabels.TRANSFORM_HELMERT if len(local_pts) == 2 else UILabels.TRANSFORM_AFFINE.format(count=len(local_pts))
 
         res_summary = (
@@ -677,49 +780,50 @@ class GeorefLogic(QObject):
             UILabels.TAB1_INFO_TRANSFORM_DONE, status_type="success"
         )
 
-        self.transform_panel.get("export_layer").setEnabled(True)
         self.iface.messageBar().pushMessage(
             UIMessages.MSG_TITLE_INFO, UILabels.MSG_TRANSFORM_SUCCESS,
             level=Qgis.MessageLevel.Success, duration=4,
         )
 
     def _on_export_layer_clicked(self) -> None:
-        if self.calculated_affine_params is None:
+        state = self.state_store.state
+        if state.calculated_affine_params is None:
             QMessageBox.warning(self.parent_widget, UIMessages.ERR_TITLE_GENERIC, UILabels.ERR_TRANSFORM_NOT_CALCULATED)
             return
 
-        layer_name = self.confirmed_layer_name or self.image_panel.get_value("image_name").strip()
+        layer_name = state.confirmed_layer_name or self.image_panel.get_value("image_name").strip()
 
-        if not self.current_copied_image_path or not os.path.isfile(self.current_copied_image_path):
+        if not state.current_copied_image_path or not os.path.isfile(state.current_copied_image_path):
             QMessageBox.critical(self.parent_widget, UIMessages.ERR_TITLE_FILE, UIMessages.ERR_IMAGE_FILE_NOT_FOUND)
             return
 
         session_img_dir = self.layer_manager.session_image_dir
-        current_dir = os.path.normcase(os.path.normpath(os.path.dirname(self.current_copied_image_path)))
+        current_dir = os.path.normcase(os.path.normpath(os.path.dirname(state.current_copied_image_path)))
         already_in_session = bool(session_img_dir) and current_dir == os.path.normcase(os.path.normpath(session_img_dir))
 
+        dest_path = state.current_copied_image_path
         if not already_in_session:
-            success, msg, dest_path = self.layer_manager.copy_image_to_session(self.current_copied_image_path)
+            success, msg, copy_path = self.layer_manager.copy_image_to_session(state.current_copied_image_path)
             if not success:
                 QMessageBox.critical(self.parent_widget, UIMessages.ERR_TITLE_FILE, msg)
                 return
-            self.current_copied_image_path = dest_path
+            dest_path = copy_path
 
         with self.busy_interaction_guard_cb():
-            success, msg, _ = self.layer_manager.write_world_file(self.current_copied_image_path, self.calculated_affine_params)
+            success, msg, _ = self.layer_manager.write_world_file(dest_path, state.calculated_affine_params)
             if not success:
                 QMessageBox.critical(self.parent_widget, UIMessages.ERR_TITLE_GENERIC, UIMessages.ERR_WORLDFILE_FAILED.format(msg=msg))
                 return
 
             self.layer_manager.update_image_metadata(
-                layer_name, self.current_copied_image_path, self.ref_points_data, self.calculated_affine_params
+                layer_name, dest_path, state.ref_points_data, state.calculated_affine_params
             )
 
             if self.point_layer and self.point_layer.isValid():
-                update_point_layer_geometry(self.point_layer, self.calculated_affine_params, drawing_name=layer_name)
+                update_point_layer_geometry(self.point_layer, state.calculated_affine_params, drawing_name=layer_name)
 
             success, msg, raster_layer = self.layer_manager.load_georeferenced_raster(
-                self.current_copied_image_path, custom_layer_name=layer_name
+                dest_path, custom_layer_name=layer_name
             )
             if not success or raster_layer is None:
                 QMessageBox.critical(self.parent_widget, UIMessages.ERR_TITLE_GENERIC, UIMessages.ERR_CANVAS_PLACEMENT_FAILED.format(msg=msg))
@@ -739,14 +843,10 @@ class GeorefLogic(QObject):
             level=Qgis.MessageLevel.Success, duration=6,
         )
 
-        mode_buttons = self.mode_panel.get_buttons("tab1_mode")
-        if mode_buttons[0].isChecked():
-            self.image_panel.set_value("image_path", "")
-            self.image_panel.set_value("image_name", "")
-            self.ref_points_data.clear()
-            self.calculated_affine_params = None
-            self.confirmed_layer_name = None
-            self._refresh_ref_points_table_and_markers()
+        if state.tab1_mode == "new":
+            self.state_store.dispatch(SetGeorefStateAction(
+                image_path="", layer_name="", clear_ref_points=True, affine_params=None
+            ))
 
         image_dialog = self.get_image_dialog_cb()
         if image_dialog:

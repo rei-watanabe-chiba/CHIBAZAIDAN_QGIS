@@ -173,6 +173,7 @@ def create_tab1_ui(dock_widget) -> QWidget:
     # Controller (GeorefLogic) の初期化と UIコンポーネントの依存性注入 (DI)
     # -----------------------------------------------------------------
     logic = GeorefLogic(
+        state_store=dock_widget.state_store,
         layer_manager=dock_widget.layer_manager,
         layers_dict=dock_widget.layers_dict,
         iface=dock_widget.iface,

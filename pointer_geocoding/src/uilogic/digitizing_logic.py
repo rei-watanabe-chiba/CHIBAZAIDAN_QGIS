@@ -72,7 +72,11 @@ class DigitizingLogic(QObject):
     # パネルからの値取得・ヘルパーメソッド
     # ==========================================
     def is_sp_attribute(self) -> bool:
-        return self.attribute_panel.get_value("attribute_code") == AttributeType.SP.value
+        # CoreUIBuilderのget_valueは表示テキスト(currentText)を返すため、
+        # コンボボックスから直接データ値(currentData)を取得する
+        combo_attr = self.attribute_panel.get("attribute_code")
+        attr_value = combo_attr.currentData() or combo_attr.currentText()
+        return attr_value == AttributeType.SP.value
 
     def get_current_point_name_and_branch(self) -> Tuple[str, str]:
         if self.is_sp_attribute():
@@ -104,6 +108,11 @@ class DigitizingLogic(QObject):
             can_click = False
             error_msg = UIMessages.ERR_NEW_FEATURE_REQUIRED
             
+        # CoreUIBuilderのget_valueは表示テキスト(currentText)を返すため、
+        # コンボボックスから直接データ値(currentData)を取得する
+        combo_attr = self.attribute_panel.get("attribute_code")
+        attr_value = combo_attr.currentData() or combo_attr.currentText()
+            
         return {
             "can_click": can_click,
             "error_message": error_msg,
@@ -111,7 +120,7 @@ class DigitizingLogic(QObject):
             "excavation_type": ex_type,
             "feature_name": feat_name,
             "color_code": self.state_store.state.current_feature_color,
-            "attribute_type": self.attribute_panel.get_value("attribute_code"),
+            "attribute_type": attr_value,
             "point_name": pname,
             "branch_no": branch
         }
@@ -124,16 +133,6 @@ class DigitizingLogic(QObject):
             yield
         finally:
             self.state_store.dispatch(SetProcessingAction(False))
-
-    def _push_focus_state_to_tool(self) -> None:
-        if self.map_tool is not None:
-            state = self.state_store.state
-            filters = dict(state.display_filters) if state.display_filters else {}
-            if filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
-                filters["drawing_name"] = state.selected_drawing_name
-            else:
-                filters["drawing_name"] = ""
-            self.map_tool.update_focus_state(state.focus_active, filters)
 
     # ==========================================
     # UI イベント受容ロジック
@@ -155,15 +154,12 @@ class DigitizingLogic(QObject):
     def _on_branch_text_changed(self, text: str):
         if not text.strip() and self.state_store.state.has_digitized_with_branch:
             self.apply_next_point_number()
-            self.state_store.dispatch_silent(SetDigitizedWithBranchAction(False))
+            self.state_store.dispatch(SetDigitizedWithBranchAction(False))
         self.validate_and_sync()
 
     def _on_category_changed(self, *args):
         if self.state_store.state.selected_point_id is None:
             self.apply_next_point_number()
-        self._push_focus_state_to_tool()
-        if self.state_store.state.focus_active and self.update_symbology_opacity_cb:
-            self.update_symbology_opacity_cb()
         self.validate_and_sync()
 
     def _on_excavation_type_changed(self, index: int):
@@ -188,7 +184,7 @@ class DigitizingLogic(QObject):
             inputs["point_name"] = next_num
         
         if inputs:
-            self.state_store.dispatch_silent(UpdateDigitizingInputsAction(inputs))
+            self.state_store.dispatch(UpdateDigitizingInputsAction(inputs))
         self.refresh_point_info_labels()
 
     def refresh_point_info_labels(self):
@@ -201,7 +197,7 @@ class DigitizingLogic(QObject):
             "pointname": f"{pname} {branch}".strip() if pname else "-",
             "coords": "-",
         }
-        self.state_store.dispatch_silent(SetPointInfoSummaryAction(summary))
+        self.state_store.dispatch(SetPointInfoSummaryAction(summary))
 
     def handle_manage_feature_clicked(self):
         feature_colors = {name: "#FF5722" for name in self.state_store.state.feature_name_list if name != UILabels.UNREGISTERED}
@@ -222,14 +218,14 @@ class DigitizingLogic(QObject):
             new_name = dlg.result_text.strip()
             if new_name:
                 if hasattr(dlg, "result_color") and dlg.result_color:
-                    self.state_store.dispatch_silent(SetFeatureCacheAction(color_hex=dlg.result_color))
+                    self.state_store.dispatch(SetFeatureCacheAction(color_hex=dlg.result_color))
                 if new_name not in self.state_store.state.feature_name_list:
                     temp_list = list(self.state_store.state.feature_name_list)
                     temp_list.append(new_name)
-                    self.state_store.dispatch_silent(SetFeatureCacheAction(feature_list=temp_list))
+                    self.state_store.dispatch(SetFeatureCacheAction(feature_list=temp_list))
                 
                 # UIのコンボボックスで新しい項目を選択させる指示を Dispatch
-                self.state_store.dispatch_silent(UpdateDigitizingInputsAction({"feature_name": new_name}))
+                self.state_store.dispatch(UpdateDigitizingInputsAction({"feature_name": new_name}))
 
     def rename_and_recolor_feature(self, old_name: str, new_name: str, new_color: str) -> None:
         if not self.point_layer or not self.point_layer.isValid():
@@ -247,7 +243,7 @@ class DigitizingLogic(QObject):
                 self.point_layer.changeAttributeValue(feat.id(), color_idx, new_color)
         self.point_layer.commitChanges()
 
-        self.state_store.dispatch_silent(SetSuppressCommitAction(True))
+        self.state_store.dispatch(SetSuppressCommitAction(True))
         try:
             temp_list = list(self.state_store.state.feature_name_list)
             if old_name in temp_list:
@@ -255,10 +251,10 @@ class DigitizingLogic(QObject):
             elif new_name not in temp_list:
                 temp_list.append(new_name)
                 
-            self.state_store.dispatch_silent(SetFeatureCacheAction(color_hex=new_color, feature_list=temp_list))
-            self.state_store.dispatch_silent(UpdateDigitizingInputsAction({"feature_name": new_name}))
+            self.state_store.dispatch(SetFeatureCacheAction(color_hex=new_color, feature_list=temp_list))
+            self.state_store.dispatch(UpdateDigitizingInputsAction({"feature_name": new_name}))
         finally:
-            self.state_store.dispatch_silent(SetSuppressCommitAction(False))
+            self.state_store.dispatch(SetSuppressCommitAction(False))
 
         self.validate_and_sync()
 
@@ -390,7 +386,7 @@ class DigitizingLogic(QObject):
             self.point_layer.commitChanges()
             if current_selected_data is not None:
                 current_selected_data.update(updates)
-                self.state_store.dispatch_silent(SelectPointAction(selected_edit_point_id, current_selected_data))
+                self.state_store.dispatch(SelectPointAction(selected_edit_point_id, current_selected_data))
             if self.update_symbology_opacity_cb:
                 self.update_symbology_opacity_cb()
         return True
@@ -421,7 +417,7 @@ class DigitizingLogic(QObject):
         if not is_valid:
             self.state_store.dispatch(SetPointInfoErrorAction(has_error=True, is_out_of_bounds=True))
             return
-        self.state_store.dispatch_silent(SetPointInfoErrorAction(has_error=False, is_out_of_bounds=False))
+        self.state_store.dispatch(SetPointInfoErrorAction(has_error=False, is_out_of_bounds=False))
         self._create_digitized_point_from_state(input_state, map_point)
 
     def _handle_release_mode_click(self, map_point: QgsPointXY) -> None:
@@ -435,7 +431,7 @@ class DigitizingLogic(QObject):
         if not is_valid:
             self.state_store.dispatch(SetPointInfoErrorAction(has_error=True, is_out_of_bounds=True))
             return
-        self.state_store.dispatch_silent(SetPointInfoErrorAction(has_error=False, is_out_of_bounds=False))
+        self.state_store.dispatch(SetPointInfoErrorAction(has_error=False, is_out_of_bounds=False))
         
         input_state = self.get_digitizing_input_state()
         excavation_type = input_state["excavation_type"]
@@ -498,6 +494,12 @@ class DigitizingLogic(QObject):
             if not has_branch:
                 self.apply_next_point_number()
             self.validate_and_sync()
+            
+            if self.update_symbology_opacity_cb:
+                self.update_symbology_opacity_cb()
+            elif self.iface and self.iface.mapCanvas():
+                self.iface.mapCanvas().refresh()
+
 
     def _get_last_created_point_name(self, excavation_type: str, feature_name: str, is_sp: bool) -> str:
         if not self.point_layer or not self.point_layer.isValid():
@@ -541,7 +543,7 @@ class DigitizingLogic(QObject):
             
         if result == PointEditDialog.Accepted:
             if dialog.dialog_action == "delete":
-                self.state_store.dispatch_silent(SelectPointAction(data.get("feature_id")))
+                self.state_store.dispatch(SelectPointAction(data.get("feature_id")))
                 self.handle_delete_selected_point()
             elif dialog.dialog_action == "confirm" and self.point_layer:
                 fid = data.get("feature_id")

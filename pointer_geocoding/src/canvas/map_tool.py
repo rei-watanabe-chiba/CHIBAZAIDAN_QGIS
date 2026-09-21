@@ -443,7 +443,8 @@ class CanvasDigitizingTool(QgsMapTool):
         attr_cache = getattr(lm, "attr_cache", {})
 
         if is_focus_active:
-            req_drawing = (focus_filter.get("drawing_name") or "").strip()
+            target_drawing = focus_filter.get("target_drawing_name")
+            req_drawing = target_drawing.strip() if target_drawing is not None else None
             if req_drawing == "-- 未指定 --":
                 req_drawing = ""
 
@@ -470,9 +471,14 @@ class CanvasDigitizingTool(QgsMapTool):
                     c_feature = cached.get("feature_name", "").strip()
                     c_attribute = cached.get("attribute_type", "").strip()
 
-                    # 1. 図面判定 (req_drawing が指定されている場合のみ一致を確認)
-                    if req_drawing and c_drawing != req_drawing:
-                        continue
+                    # 1. 図面判定
+                    if req_drawing is not None:
+                        if not req_drawing:
+                            if c_drawing:  # 未指定が選択されているのに図面名を持つものは除外
+                                continue
+                        else:
+                            if c_drawing != req_drawing:  # 特定図面が選択されているのに一致しないものは除外
+                                continue
 
                     # 2. 属性判定
                     if req_attrs is not None and c_attribute not in req_attrs:

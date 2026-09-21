@@ -27,28 +27,24 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QPushButton,
-    QApplication,
     QTableWidgetItem,
     QScrollArea,
     QFrame,
     QLabel,
     QTableWidget,
-    QDialog
 )
 
 from ..canvas.map_tool import CanvasDigitizingTool, ImageGeorefTool
 from .style import UIStyleHelper
 from .constants import UIConfig, UILabels, UIMessages, UIDialogSizes, UIPlaceholders
-from .dialogs import ImageDialog, ModelessSectionDialog, DisplayFilterDialog, FeatureManageDialog
+from .dialogs import ImageDialog, ModelessSectionDialog
 from .main_image import create_tab1_ui
 from .main_settings import create_tab3_ui
 
 # --- 新設・同元化する状態管理とUI基盤 ---
 from .core.state import (
-    UIStateStore, ChangeTab2ModeAction, ChangeAutonumModeAction, 
-    SetFocusModeAction, ResetSelectionAction, SetFeatureCacheAction,
-    SetPointInfoSummaryAction, SetDigitizedWithBranchAction, SetSuppressCommitAction,
-    SelectDrawingAction
+    UIStateStore, ResetSelectionAction, SetFeatureCacheAction,
+    SelectDrawingAction, SetDisplayFiltersAction
 )
 from .core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
 from .core.builder import CoreUIBuilder
@@ -200,6 +196,21 @@ class MainDockWidget(QDockWidget):
         # View初期化
         self._init_tab2_comboboxes()
         self._restore_feature_names()
+        initial_filters = {
+            "attributes": [
+                AttributeType.S.value, 
+                AttributeType.P.value, 
+                AttributeType.C.value, 
+                AttributeType.SP.value
+            ],
+            "excavation_types": [
+                ExcavationType.FEATURE.value, 
+                ExcavationType.GRID.value
+            ],
+            "feature_names": list(self.state_store.state.feature_name_list),
+            "target_drawing": UILabels.FILTER_DRAWING_SELECTED,
+        }
+        self.state_store.dispatch_silent(SetDisplayFiltersAction(initial_filters))
         self._update_drawing_combo()
         if hasattr(self, "settings_logic"):
             self.settings_logic.update_settings_ui_from_dict()
@@ -227,11 +238,15 @@ class MainDockWidget(QDockWidget):
 
         self._update_main_map_tool_state()
 
-        # --- 追加: 起動時の連番復元とステータスUIの初期同期 ---
+        # 起動時の連番復元とステータスUIの初期同期
         if self.point_layer and self.point_layer.isValid():
             self.digitizing_logic.apply_next_point_number()
-            self.digitizing_logic.refresh_point_info_labels()
-            self._update_point_info_status_ui(self.state_store.state)
+            self.digitizing_logic.validate_and_sync()
+        
+        # 初期化フェーズの最後に全UIを強制同期
+        all_keys = self.state_store.state.__dict__.keys()
+        fake_diff = {k: getattr(self.state_store.state, k) for k in all_keys}
+        self._on_state_changed(self.state_store.state, fake_diff)
 
     @property
     def preview_canvas(self) -> Optional[QgsMapCanvas]:
@@ -422,6 +437,8 @@ class MainDockWidget(QDockWidget):
 
     def _on_state_changed(self, new_state, diff: Dict[str, Any]) -> None:
         """UIStateStoreの変更を検知し、UIの表示状態をリアクティブに同期する"""
+        if hasattr(self, "georef_logic"):
+            self.georef_logic.on_state_changed(new_state, diff)
         if "tab2_mode" in diff:
             is_new = (new_state.tab2_mode == "new")
             self.panel_point_info.get_row("autonum_mode").setVisible(is_new)
@@ -453,12 +470,9 @@ class MainDockWidget(QDockWidget):
                 btn_filter.setText(UILabels.BTN_FILTER_OFF)
                 btn_filter.setStyleSheet("")
             
-            # 対象図面の変更でも透過度を再計算
+        if any(k in diff for k in ("focus_active", "display_filters", "selected_drawing_name")):
             self.update_symbology_opacity()
-
-        if "selected_drawing_name" in diff:
-            if new_state.focus_active and new_state.display_filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
-                self.update_symbology_opacity()
+            self._update_map_tool_focus_state()
 
         if any(k in diff for k in ("point_info_summary", "point_info_has_error", "is_out_of_bounds", "status_message", "selected_point_id")):
             self._update_point_info_status_ui(new_state)
@@ -614,9 +628,8 @@ class MainDockWidget(QDockWidget):
         table.setRowCount(0)
 
         table.insertRow(0)
-        item_col0 = QTableWidgetItem()
-        item_col0.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        item_col0.setCheckState(Qt.Unchecked)
+        item_col0 = QTableWidgetItem("")
+        item_col0.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
         table.setItem(0, 0, item_col0)
         item_col1 = QTableWidgetItem(UILabels.DRAWING_UNSPECIFIED)
         item_col1.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
@@ -771,15 +784,25 @@ class MainDockWidget(QDockWidget):
 
             if is_focus_on:
                 if filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
-                    filters["drawing_name"] = state.selected_drawing_name
+                    filters["target_drawing_name"] = state.selected_drawing_name
                 else:
-                    filters["drawing_name"] = ""
+                    filters["target_drawing_name"] = None
 
             expr = self.layer_manager.build_opacity_expression(is_focus_on, filters, 0)
             self.layer_manager.apply_opacity_expression(self.point_layer, expr)
 
             if hasattr(self, "canvas") and self.canvas:
                 self.canvas.refresh()
+    
+    def _update_map_tool_focus_state(self) -> None:
+        if self.map_tool is not None:
+            state = self.state_store.state
+            filters = dict(state.display_filters) if state.display_filters else {}
+            if filters.get("target_drawing") == UILabels.FILTER_DRAWING_SELECTED:
+                filters["target_drawing_name"] = state.selected_drawing_name
+            else:
+                filters["target_drawing_name"] = None
+            self.map_tool.update_focus_state(state.focus_active, filters)
 
     def _save_project(self) -> None:
         success = self.layer_manager.save_project()
