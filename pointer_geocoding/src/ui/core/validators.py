@@ -25,7 +25,7 @@ single screen's example" policy already used for ``rules.py``.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import re
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 
 from qgis.PyQt.QtWidgets import QMessageBox, QWidget
 
@@ -142,3 +142,19 @@ def show_validation_error(
     QMessageBox.warning(parent, title, result.message)
     if focus_widget is not None:
         focus_widget.setFocus()
+
+class ChainValidator(Validator):
+    """複数の Validator を順番に実行し、最初に失敗した結果を返す連鎖型バリデータ。
+    
+    :param validators: 実行順に並べた Validator のリスト。
+    """
+    
+    def __init__(self, validators: List[Validator]) -> None:
+        self.validators = validators
+
+    def validate(self, value) -> ValidationResult:
+        for validator in self.validators:
+            result = validator.validate(value)
+            if not result.is_valid:
+                return result
+        return ValidationResult(True)
