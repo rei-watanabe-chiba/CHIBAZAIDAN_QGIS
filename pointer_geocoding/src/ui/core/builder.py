@@ -11,7 +11,6 @@ over ui/style.py, not a replacement for it.
 """
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from qgis.core import QgsMessageLog, Qgis
 from qgis.gui import QgsFilterLineEdit
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
@@ -168,57 +167,6 @@ class BuiltPanel:
         raise NotImplementedError(
             f"set_value() is not supported for field '{field_id}' (widget_type={widget_type})"
         )
-        
-    def auto_bind(self, dispatcher: Any, action_mapping: Dict[str, Callable[..., Any]]) -> None:
-        """
-        View側で定義したマッピング辞書に基づいて、イベント発生時に自動で Action を生成し Dispatch する。
-        
-        :param dispatcher: EventDispatcher のインスタンス
-        :param action_mapping: イベントフック名（hook_name）をキーとし、UIAction を返す関数（ファクトリ）を値とする辞書
-        """
-        # PanelSpecで実際に定義・登録されているフック名の集合を取得
-        registered_hooks = set(self._pending_hooks.keys())
-        
-        for hook_name in registered_hooks:
-            # 防衛措置: PanelSpecにフックが定義されているのに、マッピング辞書に存在しない場合は警告を出す
-            if hook_name not in action_mapping:
-                QgsMessageLog.logMessage(
-                    f"[CoreUI] Warning: Hook '{hook_name}' is defined in PanelSpec but missing in action_mapping.",
-                    "PointerGeocoding",
-                    Qgis.Warning
-                )
-                continue
-                
-            action_factory = action_mapping[hook_name]
-            
-            # コールバック生成クロージャ（ループ変数の束縛問題を回避）
-            def make_callback(factory=action_factory, h_name=hook_name):
-                # UIのシグナルから渡される引数 (例: idx, checked など) を可変長引数として受け取る
-                def callback(*args, **kwargs):
-                    try:
-                        # ファクトリ関数を実行して Action インスタンスを生成
-                        action = factory(*args, **kwargs)
-                        if action:
-                            dispatcher.dispatch(action)
-                    except Exception as e:
-                        QgsMessageLog.logMessage(
-                            f"[CoreUI] Error generating or dispatching action for hook '{h_name}': {str(e)}",
-                            "PointerGeocoding",
-                            Qgis.Critical
-                        )
-                return callback
-            
-            # 既存の bind を利用してシグナルとコールバックを結線
-            self.bind(hook_name, make_callback())
-        
-        # 逆に、マッピング辞書に書かれているが PanelSpec に存在しないフックがあるかチェック（デッドコードの検出）
-        for mapped_hook in action_mapping.keys():
-            if mapped_hook not in registered_hooks:
-                QgsMessageLog.logMessage(
-                    f"[CoreUI] Info: Hook '{mapped_hook}' is in action_mapping but not defined in any PanelSpec field.",
-                    "PointerGeocoding",
-                    Qgis.Info
-                )
 
     @staticmethod
     def _set_color_button(btn: QPushButton, color_hex: str) -> None:
