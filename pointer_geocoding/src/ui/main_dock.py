@@ -12,6 +12,7 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
     QgsRasterLayer,
+    QgsPointXY,
     Qgis,
 )
 from qgis.gui import (
@@ -415,9 +416,6 @@ class MainDockWidget(QDockWidget):
     # =========================================================================
 
     def _on_state_changed(self, new_state, diff: Dict[str, Any]) -> None:
-        if hasattr(self, "georef_logic"):
-            self.georef_logic.on_state_changed(new_state, diff)
-            
         if "tab2_mode" in diff:
             is_new = (new_state.tab2_mode == "new")
             self.panel_point_info.get_row("autonum_mode").setVisible(is_new)
