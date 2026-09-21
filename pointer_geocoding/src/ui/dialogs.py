@@ -242,8 +242,18 @@ class GridInputDialog(QDialog):
         tier1_vlayout.addLayout(header_layout)
 
         inputs_layout = QHBoxLayout()
-        max_gx = max(1, getattr(self.layer_manager, "max_gx", 100))
-        self.spin_x = UIStyleHelper.create_spinbox(1, max_gx, 1, tier1_box)
+        
+        # --- グリッドデータのX座標(数値)の最小値・最大値を取得 ---
+        grid_data = getattr(self.layer_manager, "grid_data", {})
+        if grid_data:
+            gxs = [k[0] for k in grid_data.keys()]
+            min_gx = min(gxs)
+            max_gx = max(gxs)
+        else:
+            min_gx = 1
+            max_gx = max(1, getattr(self.layer_manager, "max_gx", 100))
+            
+        self.spin_x = UIStyleHelper.create_spinbox(min_gx, max_gx, min_gx, tier1_box)
         self.spin_x.valueChanged.connect(self._validate_and_lookup)
 
         self.edit_y = QLineEdit(tier1_box)
@@ -293,6 +303,13 @@ class GridInputDialog(QDialog):
             unique_gy = getattr(self.layer_manager, "unique_gy", set())
             if unique_gy: default_y = sorted(list(unique_gy))[0]
             self.edit_y.setText(default_y)
+            
+            # --- 初期値としてX座標の最小値をセット ---
+            grid_data = getattr(self.layer_manager, "grid_data", {})
+            if grid_data:
+                gxs = [k[0] for k in grid_data.keys()]
+                self.spin_x.setValue(min(gxs))
+                
         self._validate_and_lookup()
 
     @pyqtSlot(str)

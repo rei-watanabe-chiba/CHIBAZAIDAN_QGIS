@@ -215,6 +215,17 @@ class GeorefLogic(QObject):
         meta = self.layer_manager.load_image_metadata()
         layer_meta = meta.get(layer_name, {})
         image_path = layer_meta.get("file_path", "")
+        # --- 画像ファイルパスの動的フォールバック ---
+        if not image_path or not os.path.isfile(image_path):
+            project = QgsProject.instance()
+            for tree_layer in project.layerTreeRoot().findLayers():
+                l = tree_layer.layer()
+                # 同名のレイヤかつ、パスを保持しているレイヤを探す
+                if l and l.isValid() and l.name() == layer_name and hasattr(l, 'source'):
+                    src = l.source()
+                    if os.path.isfile(src):
+                        image_path = src
+                        break
         affine_params = layer_meta.get("affine_params")
         if affine_params is not None:
             affine_params = tuple(affine_params)
@@ -248,10 +259,17 @@ class GeorefLogic(QObject):
 
         image_dialog = self.get_image_dialog_cb()
         if image_dialog and image_dialog.raster_layer is not None:
-            image_dialog.set_ref_points_data(state.ref_points_data)
-            image_dialog.show()
-            image_dialog.raise_()
-            image_dialog.activateWindow()
+            # 既存のキャンバス画像と、選択された画像パスが異なる場合は再作成する
+            current_src = image_dialog.raster_layer.source()
+            if os.path.normcase(os.path.normpath(current_src)) != os.path.normcase(os.path.normpath(state.current_copied_image_path)):
+                self._create_preview_canvas(state.current_copied_image_path)
+            else:
+                image_dialog.set_ref_points_data(state.ref_points_data)
+                # 再表示の際もマーカーを明示的に再描画する
+                self._refresh_ref_points_table_and_markers(state)
+                image_dialog.show()
+                image_dialog.raise_()
+                image_dialog.activateWindow()
         else:
             self._create_preview_canvas(state.current_copied_image_path)
 
@@ -511,6 +529,9 @@ class GeorefLogic(QObject):
                 self._on_preview_canvas_point_clicked,
                 self.state_store.state.ref_points_data,
             )
+            # キャンバスを作成・リセットした直後に、必ずマーカーを視覚的に描画する
+            self._refresh_ref_points_table_and_markers(self.state_store.state)
+            
             image_dialog.show()
             image_dialog.raise_()
             image_dialog.activateWindow()
