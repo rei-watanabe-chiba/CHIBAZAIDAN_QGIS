@@ -3,27 +3,27 @@
  PointerGeocoding Plugin - Filter Logic (Controller)
  ***************************************************************************/
 
-Tab 2 の表示設定（フォーカスモード、基準点表示、図面表示切り替え）イベントを受容し、
-キャンバスやレイヤツリーの可視性制御を処理するController層です。
-UI層からは BuiltPanel を注入（DI）されることで直接イベントをバインドし、循環参照を防ぎます。
+Tab 2 の表示設定（レイヤツリー可視性制御等）の副作用イベントを受容し処理する
+Controller層です。UI（View）の知識は一切持たず、DispatcherからのActionのみを処理します。
 """
 from typing import Optional
 from qgis.core import QgsProject
-from qgis.PyQt.QtCore import QObject, Qt
-from qgis.PyQt.QtWidgets import QDialog
+from qgis.PyQt.QtCore import QObject
 
-from ..ui.core.state import UIStateStore, SetFocusModeAction, SetDisplayFiltersAction
-from ..ui.dialogs import DisplayFilterDialog
-
+from ..ui.core.state import (
+    UIStateStore, SetRefLayerVisibilityAction, SetDrawingLayerVisibilityAction,
+    ToggleAllDrawingsVisibilityAction, UIAction
+)
 
 class FilterLogic(QObject):
     """
-    表示フィルター・レイヤ可視性制御を担うControllerクラス。
+    表示フィルター・レイヤ可視性制御（QGISプロジェクト上の副作用）を担うControllerクラス。
     """
     def __init__(
         self,
         state_store: UIStateStore,
         layer_manager,
+        dispatcher,
         iface,
         parent: Optional[QObject] = None
     ):
@@ -31,77 +31,59 @@ class FilterLogic(QObject):
         self.state_store = state_store
         self.layer_manager = layer_manager
         self.iface = iface
-        self.parent_widget = parent
         self.canvas = self.iface.mapCanvas()
         
-        self.display_panel = None
+        # Dispatcher にハンドラを登録
+        dispatcher.register_handler(SetRefLayerVisibilityAction, self.handle_ref_layer_visibility)
+        dispatcher.register_handler(SetDrawingLayerVisibilityAction, self.handle_drawing_layer_visibility)
+        dispatcher.register_handler(ToggleAllDrawingsVisibilityAction, self.handle_toggle_all_drawings_visibility)
 
-    def bind_ui_panels(self, display_panel):
-        """Viewから BuiltPanel インスタンスを受け取り、Controller自身でシグナルをバインドする"""
-        self.display_panel = display_panel
-
-        # コントローラー主導のイベントバインド（一方向依存を維持）
-        self.display_panel.bind("filter_toggled", self._on_filter_toggled)
-        self.display_panel.bind("filter_settings_clicked", self._show_display_filter_dialog)
-        self.display_panel.bind("ref_point_visibility_changed", self._on_ref_point_visibility_changed)
-        self.display_panel.bind("drawing_table_cell_changed", self._on_table_cell_changed)
-
-    def _on_filter_toggled(self, checked: bool) -> None:
-        """フォーカスモードのトグルボタン切り替え"""
-        self.state_store.dispatch(SetFocusModeAction(checked))
-
-    def _show_display_filter_dialog(self) -> None:
-        """表示フィルター設定ダイアログの表示"""
-        dlg = DisplayFilterDialog(
-            parent=self.parent_widget,
-            feature_names=self.state_store.state.feature_name_list,
-            initial_filters=self.state_store.state.display_filters,
-        )
-        if dlg.exec_() == QDialog.Accepted:
-            # 1. フィルター設定を更新
-            self.state_store.dispatch(SetDisplayFiltersAction(dlg.get_filters()))
-            # 2. OKクリック時にフォーカスモードを強制ONにする
-            self.state_store.dispatch(SetFocusModeAction(True))
-
-    def _on_ref_point_visibility_changed(self, idx: int) -> None:
-        """基準点レイヤの表示/非表示ラジオボタンの切り替え"""
-        checked = (idx == 0)
+    def handle_ref_layer_visibility(self, action: SetRefLayerVisibilityAction) -> Optional[UIAction]:
+        """基準点レイヤの表示/非表示を切り替える"""
         ref_layer = getattr(self.layer_manager, "ref_point_layer", None)
         if not ref_layer:
-            return
+            return None
             
         root = QgsProject.instance().layerTreeRoot()
         if not root:
-            return
+            return None
             
         ref_group = root.findGroup("基準点データ")
         search_root = ref_group if ref_group else root
         tree_layer = search_root.findLayer(ref_layer.id())
         
         if tree_layer:
-            tree_layer.setItemVisibilityChecked(checked)
+            tree_layer.setItemVisibilityChecked(action.visible)
             if self.canvas:
                 self.canvas.refresh()
+        return None
 
-    def _on_table_cell_changed(self, row: int, col: int) -> None:
-        """図面選択テーブルのチェックボックス（可視性）切り替え"""
-        table = self.display_panel.get("drawing_list_table")
-        item = table.item(row, col)
-        
-        if item is None or col != 0:
-            return
-            
-        layer_id = item.data(Qt.UserRole)
-        if not layer_id:
-            return
-            
-        is_checked = (item.checkState() == Qt.Checked)
+    def handle_drawing_layer_visibility(self, action: SetDrawingLayerVisibilityAction) -> Optional[UIAction]:
+        """個別の図面レイヤの表示/非表示を切り替える"""
         root = QgsProject.instance().layerTreeRoot()
         if root:
             image_group = root.findGroup("画像ファイル")
             if image_group:
-                tree_layer = image_group.findLayer(layer_id)
+                tree_layer = image_group.findLayer(action.layer_id)
                 if tree_layer:
-                    tree_layer.setItemVisibilityChecked(is_checked)
+                    tree_layer.setItemVisibilityChecked(action.visible)
                     if self.canvas:
                         self.canvas.refresh()
+        return None
+
+    def handle_toggle_all_drawings_visibility(self, action: ToggleAllDrawingsVisibilityAction) -> Optional[UIAction]:
+        """全図面レイヤの表示/非表示を一括で切り替える"""
+        root = QgsProject.instance().layerTreeRoot()
+        if not root:
+            return None
+            
+        image_group = root.findGroup("画像ファイル")
+        if not image_group:
+            return None
+            
+        for tree_layer in image_group.findLayers():
+            tree_layer.setItemVisibilityChecked(action.visible)
+            
+        if self.canvas:
+            self.canvas.refresh()
+        return None
