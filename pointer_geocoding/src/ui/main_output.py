@@ -4,77 +4,120 @@
  ***************************************************************************/
 
 Tab 4 (出力) のUI構築に専念する純粋なViewモジュールです。
-構築したUI要素は Controller (OutputLogic) に DI され、イベント処理を委譲します。
+構築したUI要素（BuiltPanel）は Controller (OutputLogic) に DI され、
+イベント処理を単一方向依存で委譲します。
 """
-from qgis.PyQt.QtWidgets import QWidget, QGroupBox, QVBoxLayout, QLabel, QRadioButton, QPushButton
-from qgis.gui import QgsFilterLineEdit
+import os
+from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QFrame, QFileDialog
+from qgis.core import Qgis
 
-from .style import UIStyleHelper
-from .constants import UIConfig, UILabels, UIPlaceholders, MAIN_RATIO
+from .constants import UIConfig, UILabels, UIPlaceholders, UIDialogTitles
+from .core.builder import CoreUIBuilder
+from .core.field_spec import FieldSpec, PanelSpec, WidgetType, ButtonDef
 from ..uilogic.output_logic import OutputLogic
 
+# =========================================================================
+# CoreUI Schemas for Tab 4 (Co-location)
+# =========================================================================
+
+TAB4_OUTPUT_SPEC = PanelSpec(
+    panel_id="tab4_output",
+    spacing=6,
+    fields=[
+        FieldSpec(
+            field_id="csv_section", 
+            widget_type=WidgetType.SECTION_HEADER, 
+            label=UILabels.GROUP_CSV
+        ),
+        FieldSpec(
+            field_id="encoding",
+            widget_type=WidgetType.RADIO_ROW,
+            label=UILabels.ENCODING,
+            options=[UILabels.RADIO_UTF8, UILabels.RADIO_SJIS],
+            default_index=0,
+            on_change="encoding_changed",
+        ),
+        FieldSpec(
+            field_id="csv_path",
+            widget_type=WidgetType.LINEEDIT_ROW,
+            label=UILabels.CSV_DESTINATION,
+            placeholder=UIPlaceholders.CSV_PATH,
+            trailing_button=ButtonDef(
+                field_id="browse_csv", text=UILabels.BTN_BROWSE, on_click="browse_csv_clicked"
+            ),
+            on_change="csv_path_changed",
+        ),
+        FieldSpec(
+            field_id="export_action",
+            widget_type=WidgetType.BUTTON_ROW,
+            centered=False,
+            buttons=[
+                ButtonDef(
+                    field_id="export_csv",
+                    text=UILabels.BTN_EXPORT_CSV,
+                    style_variant="accent",
+                    on_click="export_csv_clicked",
+                )
+            ]
+        )
+    ]
+)
 
 def create_tab4_ui(dock_widget) -> QWidget:
-    """Construct the 出力 (CSV export) dialog content (T-0024)."""
-    csv_group = QGroupBox()
-    csv_layout = QVBoxLayout(csv_group)
-    csv_layout.setContentsMargins(
+    """Construct the 出力 (CSV export) dialog content."""
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.NoFrame)
+
+    container = QWidget()
+    layout = QVBoxLayout(container)
+    layout.setContentsMargins(
         UIConfig.COMMON_MARGIN_LR,
         UIConfig.DIALOG_MARGIN,
         UIConfig.COMMON_MARGIN_LR,
         UIConfig.DIALOG_MARGIN,
     )
-    csv_layout.setSpacing(UIConfig.DIALOG_MARGIN)
-    csv_layout.addWidget(
-        UIStyleHelper.build_separator(csv_group, title_text=UILabels.GROUP_CSV)
-    )
+    layout.setSpacing(UIConfig.DIALOG_MARGIN)
 
-    lbl_encoding = QLabel(UILabels.ENCODING, csv_group)
-    radio_utf8 = QRadioButton(UILabels.RADIO_UTF8, csv_group)
-    radio_utf8.setChecked(True)
-    radio_sjis = QRadioButton(UILabels.RADIO_SJIS, csv_group)
-    row_encoding = UIStyleHelper.build_flex_row(
-        lbl_encoding,
-        [(radio_utf8, 1), (radio_sjis, 1), (None, 1)],
-        main_ratio=MAIN_RATIO,
-        row_height=UIConfig.ROW_HEIGHT,
-    )
-    csv_layout.addWidget(row_encoding)
+    # 宣言的スキーマからのビルド
+    panel = CoreUIBuilder.build(TAB4_OUTPUT_SPEC, parent=container)
+    layout.addWidget(panel.widget)
+    layout.addStretch()
 
-    lbl_csv_path = QLabel(UILabels.CSV_DESTINATION, csv_group)
-    edit_csv_path = QgsFilterLineEdit(csv_group)
-    edit_csv_path.setShowClearButton(True)
-    edit_csv_path.setPlaceholderText(UIPlaceholders.CSV_PATH)
-    btn_browse_csv = QPushButton(UILabels.BTN_BROWSE, csv_group)
-    row_csv = UIStyleHelper.build_flex_row(
-        lbl_csv_path,
-        [(edit_csv_path, 1), (btn_browse_csv, 0)],
-        main_ratio=MAIN_RATIO,
-        row_height=UIConfig.ROW_HEIGHT,
-    )
-    csv_layout.addWidget(row_csv)
-
-    btn_export_csv = QPushButton(UILabels.BTN_EXPORT_CSV, csv_group)
-    UIStyleHelper.set_accent_button(btn_export_csv)
-    csv_layout.addWidget(btn_export_csv)
+    scroll.setWidget(container)
 
     # -----------------------------------------------------------------
     # Controller (OutputLogic) の初期化と UIコンポーネントの依存性注入 (DI)
     # -----------------------------------------------------------------
-    # dock_widget を親(QObject)に指定してガベージコレクションから保護
     logic = OutputLogic(
+        state_store=dock_widget.state_store,
         layer_manager=dock_widget.layer_manager,
-        layers_dict=dock_widget.layers_dict,
-        iface=dock_widget.iface,
         parent=dock_widget
     )
-    
-    # イベントバインド用の参照を注入
-    logic.bind_ui(
-        edit_csv_path=edit_csv_path,
-        radio_utf8=radio_utf8,
-        btn_browse_csv=btn_browse_csv,
-        btn_export_csv=btn_export_csv
-    )
 
-    return csv_group
+    # View層固有の振る舞い（ファイルダイアログ、メッセージバー操作）を
+    # Controllerへコールバック関数としてDIする
+    def browse_csv_dialog(start_dir: str) -> str:
+        filepath, _ = QFileDialog.getSaveFileName(
+            dock_widget,
+            UIDialogTitles.BROWSE_CSV,
+            start_dir,
+            UIDialogTitles.CSV_FILTER,
+        )
+        return filepath
+
+    def show_message_bar(title: str, msg: str, level: int, duration: int) -> None:
+        if dock_widget.iface:
+            dock_widget.iface.messageBar().pushMessage(title, msg, level=level, duration=duration)
+
+    callbacks = {
+        "browse_csv_dialog": browse_csv_dialog,
+        "show_message_bar": show_message_bar
+    }
+    
+    logic.bind_view_callbacks(callbacks)
+    logic.bind_ui_panels(panel)
+
+    dock_widget.output_logic = logic
+
+    return scroll
