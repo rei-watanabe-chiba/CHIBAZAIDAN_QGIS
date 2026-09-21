@@ -22,7 +22,7 @@ class UIState:
     point_info_has_error: bool = False
     is_out_of_bounds: bool = False
     status_message: str = ""
-    error_focus_field: Optional[str] = None  # [追加] エラー発生時のフォーカス対象フィールドID
+    error_focus_field: Optional[str] = None  # エラー発生時のフォーカス対象フィールドID
     
     # 4. キャッシュ・表示データ
     focus_active: bool = False
@@ -79,7 +79,6 @@ class SetDigitizedWithBranchAction(UIAction):
 
 @dataclass
 class SelectDrawingAction(UIAction):
-    """対象図面の選択状態を更新するAction"""
     drawing_name: str
 
 # ==========================================
@@ -120,7 +119,7 @@ class SetPointInfoSummaryAction(UIAction):
 class SetValidationAction(UIAction):
     has_error: bool
     message: str
-    focus_field_id: Optional[str] = None  # [追加] エラー対象のフィールドID
+    focus_field_id: Optional[str] = None
 
 @dataclass
 class SetPointInfoErrorAction(UIAction):
@@ -151,6 +150,56 @@ class UpdateOutputSettingsAction(UIAction):
     encoding: Optional[int] = None
     csv_path: Optional[str] = None
 
+# ==========================================
+# 打刻・編集・レイヤ操作 (Tab 2) ドメイン Action [新規追加]
+# ==========================================
+@dataclass
+class ValidateDigitizingInputsAction(UIAction):
+    """UIの入力状態のリアルタイムバリデーションと同期を要求するAction"""
+    pass
+
+@dataclass
+class CanvasClickAction(UIAction):
+    """キャンバスがクリックされた時のAction (新規打刻のトリガー)"""
+    map_point: Any  # QgsPointXY
+
+@dataclass
+class AddManualDigitizedPointAction(UIAction):
+    """リリースモード等で手動入力された名前で点を追加するAction"""
+    map_point: Any  # QgsPointXY
+    point_name: str
+    branch_no: str
+
+@dataclass
+class DeletePointAction(UIAction):
+    """指定されたIDの点を削除するAction"""
+    feature_id: int
+
+@dataclass
+class UpdatePointAttributesAction(UIAction):
+    """既存点の属性を更新するAction"""
+    feature_id: int
+    updates: Dict[str, Any]
+
+@dataclass
+class UpdateFeatureCategoryAction(UIAction):
+    """遺構名・カラーを一括更新するAction"""
+    old_name: str
+    new_name: str
+    new_color: str
+
+@dataclass
+class ChangeRefPointVisibilityAction(UIAction):
+    """基準点の表示/非表示を切り替えるAction"""
+    is_visible: bool
+
+@dataclass
+class ChangeDrawingVisibilityAction(UIAction):
+    """図面（画像）の表示/非表示を切り替えるAction"""
+    layer_id: str
+    is_visible: bool
+
+
 class UIStateStore(QObject):
     state_changed = pyqtSignal(object, dict)
 
@@ -172,9 +221,6 @@ class UIStateStore(QObject):
         """
         複数のUIActionを一括適用し、変更差分を統合して1回のみ state_changed シグナルを発行する。
         EventDispatcherのパイプライン処理等で使用する。
-        
-        Args:
-            actions: 適用するUIActionのリスト
         """
         if not actions:
             return
@@ -191,13 +237,7 @@ class UIStateStore(QObject):
     def _apply_action(self, action: UIAction, emit_signal: bool = True) -> dict:
         """
         アクションを現在の状態に適用し、差分を返す。
-        
-        Args:
-            action: 適用するUIAction
-            emit_signal: 状態変更後にシグナルを発行するかどうか
-            
-        Returns:
-            更新された状態の差分辞書
+        ※ドメイン層の Action (CanvasClickAction 等) は直接 State を変更しないため、ここには記述しません。
         """
         new_state_kwargs = {}
         

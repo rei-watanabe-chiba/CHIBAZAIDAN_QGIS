@@ -6,7 +6,6 @@
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
 import os
-from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Tuple
 
 from qgis.core import (
@@ -20,7 +19,7 @@ from qgis.gui import (
     QgsMapCanvas,
 )
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QColor, QIcon
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QWidget,
@@ -32,30 +31,35 @@ from qgis.PyQt.QtWidgets import (
     QFrame,
     QLabel,
     QTableWidget,
+    QDialog,
+    QApplication,
 )
 
 from ..canvas.map_tool import CanvasDigitizingTool, ImageGeorefTool
 from .style import UIStyleHelper
 from .constants import UIConfig, UILabels, UIMessages, UIDialogSizes, UIPlaceholders
-from .dialogs import ImageDialog, ModelessSectionDialog
+from .dialogs import ImageDialog, ModelessSectionDialog, FeatureManageDialog, PointNameEntryDialog, PointEditDialog, DisplayFilterDialog
 from .main_image import create_tab1_ui
 from .main_settings import create_tab3_ui
+from .main_output import create_tab4_ui
 
 # --- 新設・同元化する状態管理とUI基盤 ---
 from .core.state import (
     UIStateStore, ResetSelectionAction, SetFeatureCacheAction,
-    SelectDrawingAction, SetDisplayFiltersAction
+    SelectDrawingAction, SetDisplayFiltersAction, ChangeTab2ModeAction,
+    ChangeAutonumModeAction, SetFocusModeAction, UpdateDigitizingInputsAction,
+    ValidateDigitizingInputsAction, SetPointInfoErrorAction, CanvasClickAction,
+    AddManualDigitizedPointAction, DeletePointAction, UpdatePointAttributesAction,
+    UpdateFeatureCategoryAction, ChangeRefPointVisibilityAction, ChangeDrawingVisibilityAction
 )
 from .core.field_spec import ButtonDef, FieldSpec, PanelSpec, WidgetType
 from .core.builder import CoreUIBuilder
+from ..uilogic.dispatcher import EventDispatcher
 
 # --- Controller (ロジック層) のインポート ---
 from ..uilogic.digitizing_logic import DigitizingLogic
 from ..uilogic.filter_logic import FilterLogic
-from ..logic.core import AttributeType, ExcavationType, get_next_point_number, safe_get_str
-
-# --- 分離された Tab4 (出力) のUI構築メソッド ---
-from .main_output import create_tab4_ui
+from ..logic.core import AttributeType, ExcavationType, safe_get_str
 
 
 # =========================================================================
@@ -120,8 +124,6 @@ TAB2_DISPLAY_FILTER_SPEC = PanelSpec(
 
 class MainDockWidget(QDockWidget):
     
-    INVALID_CHARS_PATTERN = r'[\\/:*?"<>|]'
-
     def __init__(
         self,
         iface: QgisInterface,
@@ -139,34 +141,30 @@ class MainDockWidget(QDockWidget):
         self.canvas: QgsMapCanvas = self.iface.mapCanvas()
 
         self.image_dialog: Optional[ImageDialog] = None
-        self.current_copied_image_path: Optional[str] = None
-        self.confirmed_layer_name: Optional[str] = None
-        self.calculated_affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
-        self.ref_points_data: List[Dict[str, Any]] = []
 
-        # Tab 2: Digitizing state (Stateオブジェクトへ一括集約)
+        # StateStore と中央 Dispatcher の初期化
         self.state_store = UIStateStore(self)
+        self.dispatcher = EventDispatcher(self.state_store)
 
         # -----------------------------------------------------------------
-        # Step C: Controller (DigitizingLogic) の初期化とViewコールバックの登録
+        # Controller (ロジック層) の初期化とコールバックDI
         # -----------------------------------------------------------------
         self.digitizing_logic = DigitizingLogic(
-            self.state_store, self.layer_manager, self.layers_dict, self.iface, parent=self
+            self.state_store, self.layer_manager, self.layers_dict, self.iface, self.dispatcher, parent=self
         )
-        
         self.filter_logic = FilterLogic(
-            self.state_store, self.layer_manager, self.iface, parent=self
+            self.state_store, self.layer_manager, self.iface, self.dispatcher, parent=self
         )
 
         self.map_tool = CanvasDigitizingTool(
             self.canvas, self.point_layer, dock_widget=self, layer_manager=self.layer_manager
         )
         
-        # キャンバスのイベントをControllerへ転送
-        self.map_tool.canvas_clicked.connect(self.digitizing_logic.handle_canvas_click)
-        self.map_tool.existing_point_selected.connect(self.digitizing_logic.handle_existing_point_selected)
+        # キャンバスイベントの View 側での受容と振り分け
+        self.map_tool.canvas_clicked.connect(self._on_canvas_clicked)
+        self.map_tool.existing_point_selected.connect(self._on_existing_point_selected)
         self.map_tool.blank_click_in_edit_mode.connect(
-            lambda: self.state_store.dispatch(ResetSelectionAction())
+            lambda: self.dispatcher.dispatch(ResetSelectionAction())
         )
 
         self._init_ui()
@@ -176,19 +174,10 @@ class MainDockWidget(QDockWidget):
         UIStyleHelper.apply_theme(self.output_dialog)
 
         # ViewコールバックをControllerへバインド
-        callbacks = {
-            "map_tool": self.map_tool,
-            "parent_widget": self,
+        self.digitizing_logic.bind_view_callbacks({
             "update_symbology_opacity": self.update_symbology_opacity,
-            "get_drawing_layer_names": self._get_drawing_layer_names,
-        }
-        self.digitizing_logic.bind_view_callbacks(callbacks)
-        self.digitizing_logic.bind_ui_panels(
-            self.panel_mode, self.panel_point_info, self.panel_attribute, self.panel_display
-        )
-        self.panel_attribute.bind("category_changed", self._update_point_name_widget_visibility)
-        self.panel_attribute.bind("excavation_type_changed", self._update_feature_row_visibility)
-        self.filter_logic.bind_ui_panels(self.panel_display)
+            "refresh_canvas": self.canvas.refresh,
+        })
 
         # StateStoreの変更を監視してUIを自動同期
         self.state_store.state_changed.connect(self._on_state_changed)
@@ -198,15 +187,10 @@ class MainDockWidget(QDockWidget):
         self._restore_feature_names()
         initial_filters = {
             "attributes": [
-                AttributeType.S.value, 
-                AttributeType.P.value, 
-                AttributeType.C.value, 
-                AttributeType.SP.value
+                AttributeType.S.value, AttributeType.P.value, 
+                AttributeType.C.value, AttributeType.SP.value
             ],
-            "excavation_types": [
-                ExcavationType.FEATURE.value, 
-                ExcavationType.GRID.value
-            ],
+            "excavation_types": [ExcavationType.FEATURE.value, ExcavationType.GRID.value],
             "feature_names": list(self.state_store.state.feature_name_list),
             "target_drawing": UILabels.FILTER_DRAWING_SELECTED,
         }
@@ -221,11 +205,7 @@ class MainDockWidget(QDockWidget):
             project.layersRemoved.connect(self._update_drawing_combo)
 
         if self.point_layer and self.point_layer.isValid() and self.layer_manager:
-            current_settings = (
-                self.layer_manager.load_settings()
-                if hasattr(self.layer_manager, "load_settings")
-                else None
-            )
+            current_settings = self.layer_manager.load_settings() if hasattr(self.layer_manager, "load_settings") else None
             self.layer_manager.apply_point_symbology(self.point_layer, current_settings)
         self.update_symbology_opacity()
 
@@ -238,10 +218,9 @@ class MainDockWidget(QDockWidget):
 
         self._update_main_map_tool_state()
 
-        # 起動時の連番復元とステータスUIの初期同期
+        # 初期バリデーション発行
         if self.point_layer and self.point_layer.isValid():
-            self.digitizing_logic.apply_next_point_number()
-            self.digitizing_logic.validate_and_sync()
+            self._update_digitizing_inputs_to_state()
         
         # 初期化フェーズの最後に全UIを強制同期
         all_keys = self.state_store.state.__dict__.keys()
@@ -280,25 +259,21 @@ class MainDockWidget(QDockWidget):
         top_layout.setSpacing(UIConfig.TOP_ROW_BUTTON_SPACING)
 
         self.btn_top_image = QPushButton(UILabels.BTN_TOP_IMAGE, top_row)
-        self.btn_top_image.setObjectName("btnTopImage")
         self.btn_top_image.setIcon(self._load_icon("image.svg"))
         self.btn_top_image.clicked.connect(self._show_image_dialog)
         top_layout.addWidget(self.btn_top_image)
 
         self.btn_top_settings = QPushButton(UILabels.BTN_TOP_SETTINGS, top_row)
-        self.btn_top_settings.setObjectName("btnTopSettings")
         self.btn_top_settings.setIcon(self._load_icon("setting.svg"))
         self.btn_top_settings.clicked.connect(self._show_settings_dialog)
         top_layout.addWidget(self.btn_top_settings)
 
         self.btn_top_output = QPushButton(UILabels.BTN_TOP_OUTPUT, top_row)
-        self.btn_top_output.setObjectName("btnTopOutput")
         self.btn_top_output.setIcon(self._load_icon("output.svg"))
         self.btn_top_output.clicked.connect(self._show_output_dialog)
         top_layout.addWidget(self.btn_top_output)
 
         self.btn_save_project = QPushButton(UILabels.BTN_TOP_SAVE, top_row)
-        self.btn_save_project.setObjectName("btnTopSave")
         self.btn_save_project.setIcon(self._load_icon("save.svg"))
         UIStyleHelper.set_success_button(self.btn_save_project)
         self.btn_save_project.clicked.connect(self._save_project)
@@ -307,14 +282,13 @@ class MainDockWidget(QDockWidget):
         root_layout.addWidget(top_row)
         root_layout.addWidget(UIStyleHelper.build_separator(root_widget))
 
-        # 2. 画像 dialog
+        # 2. 外部 Dialog 構築
         self.tab1_container = create_tab1_ui(self)
         self.image_dialog = ImageDialog(
             self.tab1_container, on_show=self._update_main_map_tool_state,
             on_close=self._update_main_map_tool_state, parent=self,
         )
 
-        # 3. 設定 dialog
         self.tab3_container = create_tab3_ui(self)
         self.settings_dialog = ModelessSectionDialog(
             UILabels.TAB_3_TITLE, self.tab3_container,
@@ -323,7 +297,6 @@ class MainDockWidget(QDockWidget):
             parent=self, width=UIDialogSizes.SETTINGS_DIALOG_WIDTH, height=UIDialogSizes.SETTINGS_DIALOG_HEIGHT,
         )
 
-        # 4. 出力 dialog
         self.tab4_container = create_tab4_ui(self)
         self.output_dialog = ModelessSectionDialog(
             UILabels.TAB_4_TITLE, self.tab4_container,
@@ -340,7 +313,7 @@ class MainDockWidget(QDockWidget):
         self.setWidget(root_widget)
 
     # =========================================================================
-    # MainDockWidget メソッド (Tab2 UI構築)
+    # MainDockWidget メソッド (Tab2 UI構築 & バインド)
     # =========================================================================
 
     def _create_tab2_ui(self) -> QWidget:
@@ -356,8 +329,11 @@ class MainDockWidget(QDockWidget):
         )
         layout.setSpacing(0)
 
-        # 1. モード切替パネル (バインドはControllerで行う)
+        # 1. モード切替パネル
         self.panel_mode = CoreUIBuilder.build(TAB2_MODE_TOGGLE_SPEC, parent=container)
+        self.panel_mode.auto_bind(self.dispatcher, {
+            "mode_changed": lambda idx: ChangeTab2ModeAction("new" if idx == 0 else "edit")
+        })
         layout.addWidget(self.panel_mode.widget)
         layout.addSpacing(UIConfig.PANEL_MARGIN)
 
@@ -366,17 +342,23 @@ class MainDockWidget(QDockWidget):
         self.lbl_point_info_status = QLabel(self.panel_point_info.get("point_info_summary"))
         self.lbl_point_info_status.setWordWrap(True)
         self.panel_point_info.get("point_info_summary").layout().addWidget(self.lbl_point_info_status)
-        UIStyleHelper.update_status_panel(
-            self.panel_point_info.get("point_info_summary"), 
-            self.lbl_point_info_status, 
-            UILabels.STATUS_NEW_POINT, 
-            "info"
-        )
+        UIStyleHelper.update_status_panel(self.panel_point_info.get("point_info_summary"), self.lbl_point_info_status, UILabels.STATUS_NEW_POINT, "info")
+        
+        self.panel_point_info.auto_bind(self.dispatcher, {
+            "autonum_mode_changed": lambda idx: ChangeAutonumModeAction("auto" if idx == 0 else "release"),
+            "delete_point_clicked": lambda: DeletePointAction(self.state_store.state.selected_point_id) if self.state_store.state.selected_point_id else None
+        })
+        self.panel_point_info.bind("point_identity_changed", self._update_digitizing_inputs_to_state)
+        self.panel_point_info.bind("branch_text_changed", self._update_digitizing_inputs_to_state)
         layout.addWidget(self.panel_point_info.widget)
         layout.addWidget(UIStyleHelper.build_separator(container))
 
         # 3. 属性パネル
         self.panel_attribute = CoreUIBuilder.build(TAB2_ATTRIBUTE_SPEC, parent=container)
+        self.panel_attribute.bind("category_changed", self._on_attribute_category_changed)
+        self.panel_attribute.bind("excavation_type_changed", self._on_excavation_changed)
+        self.panel_attribute.bind("feature_combo_changed", self._update_digitizing_inputs_to_state)
+        self.panel_attribute.bind("manage_feature_clicked", self._handle_manage_feature_clicked)
         layout.addWidget(self.panel_attribute.widget)
         layout.addWidget(UIStyleHelper.build_separator(container))
 
@@ -390,23 +372,21 @@ class MainDockWidget(QDockWidget):
         table_drawing_list.setSelectionMode(QTableWidget.SingleSelection)
         table_drawing_list.setFocusPolicy(Qt.NoFocus)
         table_drawing_list.setShowGrid(False)
-        table_drawing_list.setStyleSheet(
-            "QTableView::indicator { subcontrol-position: center; }"
-            "QTableView { border: none; }"
-            "QTableView::item:focus { border: none; outline: none; }"
-        )
+        table_drawing_list.setStyleSheet("QTableView::indicator { subcontrol-position: center; } QTableView { border: none; }")
         table_drawing_list.verticalHeader().setVisible(False)
-        table_drawing_list.verticalHeader().setMinimumSectionSize(20)
         table_drawing_list.verticalHeader().setDefaultSectionSize(20)
-        header = table_drawing_list.horizontalHeader()
-        header.setStretchLastSection(True)
-        header.resizeSection(0, 40)
+        table_drawing_list.horizontalHeader().setStretchLastSection(True)
         table_drawing_list.setColumnWidth(0, 40)
         
         table_drawing_list.itemSelectionChanged.connect(self._on_drawing_table_selection_changed)
-        header.sectionClicked.connect(self._on_drawing_table_header_clicked)
+        table_drawing_list.horizontalHeader().sectionClicked.connect(self._on_drawing_table_header_clicked)
         table_drawing_list.itemChanged.connect(self._on_drawing_table_cell_changed)
         
+        self.panel_display.auto_bind(self.dispatcher, {
+            "filter_toggled": lambda checked: SetFocusModeAction(checked),
+            "ref_point_visibility_changed": lambda idx: ChangeRefPointVisibilityAction(idx == 0)
+        })
+        self.panel_display.bind("filter_settings_clicked", self._show_display_filter_dialog)
         layout.addWidget(self.panel_display.widget)
         layout.addStretch()
 
@@ -414,7 +394,6 @@ class MainDockWidget(QDockWidget):
         return scroll
 
     def _init_tab2_comboboxes(self) -> None:
-        """UI初期化として、コンボボックスの選択肢（定数）だけをロードする"""
         combo_attr = self.panel_attribute.get("attribute_code")
         combo_attr.blockSignals(True)
         for value in UILabels.ATTRIBUTE_OPTIONS:
@@ -432,13 +411,13 @@ class MainDockWidget(QDockWidget):
         combo_feat.blockSignals(False)
 
     # =========================================================================
-    # View State Sync & Helper Methods (旧 Mixin から復元)
+    # View State Sync & Helper Methods
     # =========================================================================
 
     def _on_state_changed(self, new_state, diff: Dict[str, Any]) -> None:
-        """UIStateStoreの変更を検知し、UIの表示状態をリアクティブに同期する"""
         if hasattr(self, "georef_logic"):
             self.georef_logic.on_state_changed(new_state, diff)
+            
         if "tab2_mode" in diff:
             is_new = (new_state.tab2_mode == "new")
             self.panel_point_info.get_row("autonum_mode").setVisible(is_new)
@@ -452,7 +431,6 @@ class MainDockWidget(QDockWidget):
             if getattr(self, "map_tool", None):
                 self.map_tool.clear_selected_marker()
 
-        # 1. フィルターボタンの同期（既存コード維持）
         if "focus_active" in diff or "display_filters" in diff:
             btn_filter = self.panel_display.get("filter_toggle")
             if new_state.focus_active:
@@ -477,7 +455,6 @@ class MainDockWidget(QDockWidget):
         if any(k in diff for k in ("point_info_summary", "point_info_has_error", "is_out_of_bounds", "status_message", "selected_point_id")):
             self._update_point_info_status_ui(new_state)
 
-        # 2. 遺構名リストのキャッシュ更新 (ロジックからの追加命令を反映)
         if "feature_name_list" in diff:
             combo = self.panel_attribute.get("feature_name")
             current_text = combo.currentText()
@@ -490,41 +467,51 @@ class MainDockWidget(QDockWidget):
                 combo.setCurrentIndex(idx)
             combo.blockSignals(False)
 
-        # 3. プログラムからの UI 入力値更新 (無限ループ防止の blockSignals を徹底)
         if "digitizing_inputs" in diff:
             for field_id, value in new_state.digitizing_inputs.items():
-                panel = None
-                if field_id in ["point_name", "point_name_sp", "branch_no"]:
-                    panel = self.panel_point_info
-                elif field_id in ["attribute_code", "excavation_type", "feature_name"]:
-                    panel = self.panel_attribute
-                
-                if panel:
+                panel = self.panel_point_info if field_id in ["point_name", "point_name_sp", "branch_no"] else self.panel_attribute
+                if panel and panel._field_types.get(field_id):
                     widget = panel.get(field_id)
                     widget.blockSignals(True)
-                    panel.set_value(field_id, value)
+                    if field_id == "attribute_code":
+                        idx = widget.findData(value)
+                        if idx >= 0: widget.setCurrentIndex(idx)
+                    else:
+                        panel.set_value(field_id, value)
                     widget.blockSignals(False)
 
-        # 4. is_processing に伴うキャンバスとUIの強制ロック
         if "is_processing" in diff:
             if new_state.is_processing:
-                from qgis.PyQt.QtWidgets import QApplication
                 QApplication.setOverrideCursor(Qt.WaitCursor)
                 self.setEnabled(False)
                 if getattr(self, "map_tool", None) and hasattr(self.map_tool, "set_interaction_locked"):
                     self.map_tool.set_interaction_locked(True)
             else:
-                from qgis.PyQt.QtWidgets import QApplication
                 self.setEnabled(True)
                 QApplication.restoreOverrideCursor()
                 if getattr(self, "map_tool", None) and hasattr(self.map_tool, "set_interaction_locked"):
                     self.map_tool.set_interaction_locked(False)
-                    
-    # -----------------------------------------------------------------
-    # main_dock.py : 属性や形態切り替えに伴う View固有の可視性制御 (新設)
-    # -----------------------------------------------------------------
-    def _update_point_name_widget_visibility(self, *args):
-        is_sp = (self.panel_attribute.get_value("attribute_code") == AttributeType.SP.value)
+
+    def _update_digitizing_inputs_to_state(self, *args) -> None:
+        """Viewのパネル入力状態をStateの inputs に一括反映してバリデーションを発行する"""
+        if self.state_store.state.suppress_realtime_commit:
+            return
+            
+        combo_attr = self.panel_attribute.get("attribute_code")
+        inputs = {
+            "attribute_code": combo_attr.currentData() or combo_attr.currentText(),
+            "excavation_type": self.panel_attribute.get_value("excavation_type"),
+            "feature_name": self.panel_attribute.get_value("feature_name"),
+            "point_name": self.panel_point_info.get_value("point_name"),
+            "point_name_sp": self.panel_point_info.get_value("point_name_sp"),
+            "branch_no": self.panel_point_info.get_value("branch_no")
+        }
+        self.dispatcher.dispatch(UpdateDigitizingInputsAction(inputs))
+        self.dispatcher.dispatch(ValidateDigitizingInputsAction())
+
+    def _on_attribute_category_changed(self, *args):
+        combo_attr = self.panel_attribute.get("attribute_code")
+        is_sp = ((combo_attr.currentData() or combo_attr.currentText()) == AttributeType.SP.value)
         self.panel_point_info.get_row("point_name").setVisible(not is_sp)
         self.panel_point_info.get_row("point_name_sp").setVisible(is_sp)
         
@@ -537,26 +524,25 @@ class MainDockWidget(QDockWidget):
         else:
             buttons[0].setEnabled(True)
             buttons[1].setEnabled(True)
+            
+        if self.state_store.state.selected_point_id is None:
+            self.digitizing_logic.apply_next_point_number()
+        self._update_digitizing_inputs_to_state()
 
-    def _update_feature_row_visibility(self, *args):
+    def _on_excavation_changed(self, *args):
         is_feat = self.panel_attribute.get_value("excavation_type") == ExcavationType.FEATURE.value
         self.panel_attribute.get_row("feature_name").setVisible(is_feat)
         self.panel_attribute.get_row("feature_actions").setVisible(is_feat)
+        if self.state_store.state.selected_point_id is None:
+            self.digitizing_logic.apply_next_point_number()
+        self._update_digitizing_inputs_to_state()
 
     def _update_point_info_status_ui(self, state):
         summary = state.point_info_summary
         status_text = state.status_message
-        status_type = "info"
-        
-        if state.point_info_has_error:
-            status_type = "error"
-        elif state.selected_point_id is not None:
-            status_type = "warning"
-            if not status_text:
-                status_text = UILabels.STATUS_EDIT_POINT
-        else:
-            if not status_text:
-                status_text = UILabels.STATUS_NEW_POINT
+        status_type = "error" if state.point_info_has_error else "warning" if state.selected_point_id is not None else "info"
+        if not status_text:
+            status_text = UILabels.STATUS_EDIT_POINT if state.selected_point_id is not None else UILabels.STATUS_NEW_POINT
                 
         full_text = f"{status_text}\n" \
                     f"{UILabels.LBL_INFO_GROUP_OR_FEATURE} {summary.get('group', '-')}\n" \
@@ -565,19 +551,127 @@ class MainDockWidget(QDockWidget):
                     
         UIStyleHelper.update_status_panel(
             self.panel_point_info.get("point_info_summary"), 
-            self.lbl_point_info_status, 
-            full_text, 
-            status_type
+            self.lbl_point_info_status, full_text, status_type
         )
         
-        # DigitizingLogic 側の判定メソッドを呼び出すように修正
-        is_feat_missing = self.digitizing_logic.is_feature_name_missing()
+        is_feat_missing = self.digitizing_logic.is_feature_name_missing(state.digitizing_inputs)
         is_dup = state.point_info_has_error and status_text == UILabels.STATUS_ERR_DUPLICATE
         
         UIStyleHelper.set_error_border(self.panel_attribute.get("feature_name"), is_feat_missing)
-        is_sp = self.digitizing_logic.is_sp_attribute()
+        is_sp = (state.digitizing_inputs.get("attribute_code") == AttributeType.SP.value)
         UIStyleHelper.set_error_border(self.panel_point_info.get("point_name"), is_dup and not is_sp)
         UIStyleHelper.set_error_border(self.panel_point_info.get("point_name_sp"), is_dup and is_sp)
+
+    # =========================================================================
+    # ダイアログ移管・キャンバスイベント・レイヤ制御
+    # =========================================================================
+
+    def _on_canvas_clicked(self, map_point: QgsPointXY) -> None:
+        state = self.state_store.state
+        if state.autonum_mode == "release":
+            self._handle_release_mode_click(map_point)
+        else:
+            self.dispatcher.dispatch(CanvasClickAction(map_point))
+
+    def _handle_release_mode_click(self, map_point: QgsPointXY) -> None:
+        inputs = self.state_store.state.digitizing_inputs
+        if self.digitizing_logic.is_feature_name_missing(inputs):
+            self.dispatcher.dispatch(SetPointInfoErrorAction(has_error=True))
+            return
+            
+        drawing_name = self.state_store.state.selected_drawing_name
+        is_valid, _ = self.digitizing_logic.validate_drawing_bounds(drawing_name, map_point)
+        if not is_valid:
+            self.dispatcher.dispatch(SetPointInfoErrorAction(has_error=True, is_out_of_bounds=True))
+            return
+            
+        ex_type = inputs.get("excavation_type", "")
+        feat_name = inputs.get("feature_name", "")
+        is_sp = (inputs.get("attribute_code") == AttributeType.SP.value)
+        last_name = self.digitizing_logic.get_last_created_point_name(ex_type, feat_name, is_sp)
+
+        dlg = PointNameEntryDialog(
+            self.point_layer, ex_type, feat_name, drawing_name, is_sp,
+            self, initial_point_name=last_name
+        )
+        if dlg.exec_() == QDialog.Accepted:
+            pname, bno = dlg.get_values()
+            self.dispatcher.dispatch(AddManualDigitizedPointAction(map_point, pname, bno))
+
+    def _on_existing_point_selected(self, data: dict) -> None:
+        if self.map_tool and hasattr(self.map_tool, "set_interaction_locked"):
+            self.map_tool.set_interaction_locked(True)
+            
+        drawing_names = self._get_drawing_layer_names()
+        dlg = PointEditDialog(
+            layer_manager=self.layer_manager,
+            feature_data=data,
+            drawing_names=drawing_names,
+            parent=self
+        )
+        result = dlg.exec_()
+        if self.map_tool and hasattr(self.map_tool, "set_interaction_locked"):
+            self.map_tool.set_interaction_locked(False)
+            
+        if result == QDialog.Accepted:
+            if dlg.dialog_action == "delete":
+                self.dispatcher.dispatch(DeletePointAction(data.get("feature_id")))
+            elif dlg.dialog_action == "confirm":
+                updates = {
+                    "drawing_name": dlg.feature_data["drawing_name"],
+                    "excavation_type": dlg.feature_data["excavation_type"],
+                    "feature_name": dlg.feature_data["feature_name"],
+                    "attribute_type": dlg.feature_data["attribute_type"],
+                    "point_name": dlg.feature_data["point_name"],
+                    "branch_no": dlg.feature_data["branch_no"],
+                }
+                self.dispatcher.dispatch(UpdatePointAttributesAction(data.get("feature_id"), updates))
+        
+        self.dispatcher.dispatch(ResetSelectionAction())
+        if self.map_tool:
+            self.map_tool.clear_selected_marker()
+
+    def _handle_manage_feature_clicked(self) -> None:
+        feature_colors = {name: "#FF5722" for name in self.state_store.state.feature_name_list if name != UILabels.UNREGISTERED}
+        if self.point_layer and self.point_layer.isValid():
+            for feat in self.point_layer.getFeatures():
+                fname = safe_get_str(feat, "feature_name").strip()
+                if fname and fname not in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成")):
+                    c_code = safe_get_str(feat, "color_code").strip()
+                    if c_code:
+                        feature_colors[fname] = c_code
+                    elif fname not in feature_colors:
+                        feature_colors[fname] = "#FF5722"
+
+        # QDialog の on_update_callback を用いて Controller にアクションを発行
+        dlg = FeatureManageDialog(
+            parent=self, 
+            feature_colors=feature_colors, 
+            on_update_callback=lambda old, new, col: self.dispatcher.dispatch(UpdateFeatureCategoryAction(old, new, col))
+        )
+        UIStyleHelper.apply_theme(dlg)
+        
+        if dlg.exec_() == QDialog.Accepted:
+            new_name = dlg.result_text.strip()
+            if new_name:
+                if hasattr(dlg, "result_color") and dlg.result_color:
+                    self.state_store.dispatch(SetFeatureCacheAction(color_hex=dlg.result_color))
+                temp_list = list(self.state_store.state.feature_name_list)
+                if new_name not in temp_list:
+                    temp_list.append(new_name)
+                    self.state_store.dispatch(SetFeatureCacheAction(feature_list=temp_list))
+                self.dispatcher.dispatch(UpdateDigitizingInputsAction({"feature_name": new_name}))
+                self.dispatcher.dispatch(ValidateDigitizingInputsAction())
+
+    def _show_display_filter_dialog(self) -> None:
+        dlg = DisplayFilterDialog(
+            parent=self,
+            feature_names=self.state_store.state.feature_name_list,
+            initial_filters=self.state_store.state.display_filters,
+        )
+        if dlg.exec_() == QDialog.Accepted:
+            self.dispatcher.dispatch(SetDisplayFiltersAction(dlg.get_filters()))
+            self.dispatcher.dispatch(SetFocusModeAction(True))
 
     def _restore_feature_names(self) -> None:
         if not self.point_layer or not self.point_layer.isValid():
@@ -588,10 +682,6 @@ class MainDockWidget(QDockWidget):
             combo, self.point_layer, "feature_name", leading_item=UILabels.UNREGISTERED, target_list=temp_list
         )
         self.state_store.dispatch_silent(SetFeatureCacheAction(feature_list=temp_list))
-
-    # --- Controllerに提供する View値の取得コールバック群は消去 ---
-
-    # --- 図面リスト（描画テーブル）の制御ロジック ---
 
     def _get_drawing_layers(self) -> List[Tuple[str, str, bool]]:
         root = QgsProject.instance().layerTreeRoot()
@@ -667,80 +757,39 @@ class MainDockWidget(QDockWidget):
     def _on_drawing_table_selection_changed(self) -> None:
         d_name = self._get_target_drawing_name()
         drawing = d_name if d_name != UILabels.DRAWING_UNSPECIFIED else ""
-        
-        # 選択図面をStateStoreに永続化
-        self.state_store.dispatch(SelectDrawingAction(drawing))
-        
-        if hasattr(self, "digitizing_logic"):
-            self.digitizing_logic.validate_and_sync()
+        self.dispatcher.dispatch(SelectDrawingAction(drawing))
+        self.dispatcher.dispatch(ValidateDigitizingInputsAction())
 
     def _on_drawing_table_header_clicked(self, logical_index: int) -> None:
-        """ヘッダーの「表示」列(0)がクリックされたら全画像のチェック状態を反転する"""
         if logical_index != 0:
             return
         table = self.panel_display.get("drawing_list_table")
         if table.rowCount() <= 1:
             return
 
-        # 最初の画像行(1行目)のチェック状態を基準に全反転する
         first_item = table.item(1, 0)
         if not first_item:
             return
             
         new_state = Qt.Unchecked if first_item.checkState() == Qt.Checked else Qt.Checked
-        
         table.blockSignals(True)
         try:
-            root = QgsProject.instance().layerTreeRoot()
-            if not root:
-                return
             for row in range(1, table.rowCount()):
                 chk_item = table.item(row, 0)
                 if chk_item:
                     chk_item.setCheckState(new_state)
                     layer_id = chk_item.data(Qt.UserRole)
                     if layer_id:
-                        tree_layer = root.findLayer(layer_id)
-                        if tree_layer:
-                            tree_layer.setItemVisibilityChecked(new_state == Qt.Checked)
+                        self.dispatcher.dispatch(ChangeDrawingVisibilityAction(layer_id, new_state == Qt.Checked))
         finally:
             table.blockSignals(False)
 
     def _on_drawing_table_cell_changed(self, item: QTableWidgetItem) -> None:
-        """個別のチェックボックスが操作された場合、QGISレイヤツリーの可視性を連動させる"""
         if item.column() != 0 or item.row() == 0:
             return
-            
         layer_id = item.data(Qt.UserRole)
-        if not layer_id:
-            return
-            
-        is_checked = (item.checkState() == Qt.Checked)
-        root = QgsProject.instance().layerTreeRoot()
-        if root:
-            tree_layer = root.findLayer(layer_id)
-            if tree_layer:
-                tree_layer.setItemVisibilityChecked(is_checked)
-
-    def _ensure_drawing_visible(self, layer_name: str) -> None:
-        """指定された図面レイヤを強制的に表示状態(可視化)にする"""
-        root = QgsProject.instance().layerTreeRoot()
-        if not root:
-            return
-        image_group = root.findGroup("画像ファイル")
-        if not image_group:
-            return
-            
-        changed = False
-        for tree_layer in image_group.findLayers():
-            l = tree_layer.layer()
-            if l and l.name() == layer_name:
-                tree_layer.setItemVisibilityChecked(True)
-                changed = True
-                break
-                
-        if changed:
-            self._update_drawing_combo()
+        if layer_id:
+            self.dispatcher.dispatch(ChangeDrawingVisibilityAction(layer_id, item.checkState() == Qt.Checked))
 
     def _show_image_dialog(self) -> None:
         self.image_dialog.show()
@@ -790,7 +839,6 @@ class MainDockWidget(QDockWidget):
 
             expr = self.layer_manager.build_opacity_expression(is_focus_on, filters, 0)
             self.layer_manager.apply_opacity_expression(self.point_layer, expr)
-
             if hasattr(self, "canvas") and self.canvas:
                 self.canvas.refresh()
     
