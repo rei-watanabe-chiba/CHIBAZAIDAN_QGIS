@@ -4,17 +4,16 @@
  ***************************************************************************/
 
 Tab 4 (出力) のUI構築に専念する純粋なViewモジュールです。
-構築したUI要素（BuiltPanel）は Controller (OutputLogic) に DI され、
-イベント処理を単一方向依存で委譲します。
+ボタン操作等を UIAction へマッピングし、EventDispatcher へ委譲します。
 """
 import os
 from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QFrame, QFileDialog
-from qgis.core import Qgis
 
 from .constants import UIConfig, UILabels, UIPlaceholders, UIDialogTitles
 from .core.builder import CoreUIBuilder
 from .core.field_spec import FieldSpec, PanelSpec, WidgetType, ButtonDef
 from ..uilogic.output_logic import OutputLogic
+from .core.state import UpdateOutputSettingsAction, ExportCsvAction
 
 # =========================================================================
 # CoreUI Schemas for Tab 4 (Co-location)
@@ -72,10 +71,8 @@ def create_tab4_ui(dock_widget) -> QWidget:
     container = QWidget()
     layout = QVBoxLayout(container)
     layout.setContentsMargins(
-        UIConfig.COMMON_MARGIN_LR,
-        UIConfig.DIALOG_MARGIN,
-        UIConfig.COMMON_MARGIN_LR,
-        UIConfig.DIALOG_MARGIN,
+        UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN,
+        UIConfig.COMMON_MARGIN_LR, UIConfig.DIALOG_MARGIN,
     )
     layout.setSpacing(UIConfig.DIALOG_MARGIN)
 
@@ -86,38 +83,50 @@ def create_tab4_ui(dock_widget) -> QWidget:
 
     scroll.setWidget(container)
 
-    # -----------------------------------------------------------------
-    # Controller (OutputLogic) の初期化と UIコンポーネントの依存性注入 (DI)
-    # -----------------------------------------------------------------
-    logic = OutputLogic(
+    # --- Controllerの初期化 (ディスパッチャーを渡す) ---
+    dock_widget.output_logic = OutputLogic(
         state_store=dock_widget.state_store,
         layer_manager=dock_widget.layer_manager,
+        dispatcher=dock_widget.dispatcher,
+        iface=dock_widget.iface,
         parent=dock_widget
     )
 
-    # View層固有の振る舞い（ファイルダイアログ、メッセージバー操作）を
-    # Controllerへコールバック関数としてDIする
-    def browse_csv_dialog(start_dir: str) -> str:
+    # --- 副作用のあるUI操作（ファイル選択ダイアログ）はView層で実行し、結果をActionにする ---
+    def handle_browse_csv():
+        start_dir = dock_widget.layer_manager.session_dir if dock_widget.layer_manager.session_dir else os.path.expanduser("~")
         filepath, _ = QFileDialog.getSaveFileName(
-            dock_widget,
-            UIDialogTitles.BROWSE_CSV,
-            start_dir,
-            UIDialogTitles.CSV_FILTER,
+            dock_widget, UIDialogTitles.BROWSE_CSV, start_dir, UIDialogTitles.CSV_FILTER
         )
-        return filepath
+        if filepath:
+            return UpdateOutputSettingsAction(csv_path=os.path.normpath(filepath))
+        return None
 
-    def show_message_bar(title: str, msg: str, level: int, duration: int) -> None:
-        if dock_widget.iface:
-            dock_widget.iface.messageBar().pushMessage(title, msg, level=level, duration=duration)
-
-    callbacks = {
-        "browse_csv_dialog": browse_csv_dialog,
-        "show_message_bar": show_message_bar
+    # --- イベントと Action のマッピング辞書 ---
+    action_mapping = {
+        "encoding_changed": lambda idx: UpdateOutputSettingsAction(encoding=idx),
+        "csv_path_changed": lambda text: UpdateOutputSettingsAction(csv_path=text),
+        "browse_csv_clicked": handle_browse_csv,
+        "export_csv_clicked": lambda: ExportCsvAction(),
     }
     
-    logic.bind_view_callbacks(callbacks)
-    logic.bind_ui_panels(panel)
+    # 結線を自動化して Dispatcher に流す
+    panel.auto_bind(dock_widget.dispatcher, action_mapping)
 
-    dock_widget.output_logic = logic
+    # --- View側でのUI状態のリアクティブ同期 ---
+    def on_state_changed(state, diff):
+        if "output_encoding" in diff:
+            widget = panel.get("encoding")
+            widget.blockSignals(True)
+            panel.set_value("encoding", state.output_encoding)
+            widget.blockSignals(False)
+            
+        if "output_csv_path" in diff:
+            widget = panel.get("csv_path")
+            widget.blockSignals(True)
+            panel.set_value("csv_path", state.output_csv_path)
+            widget.blockSignals(False)
+
+    dock_widget.state_store.state_changed.connect(on_state_changed)
 
     return scroll

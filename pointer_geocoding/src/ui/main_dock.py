@@ -40,6 +40,7 @@ from .constants import UIConfig, UILabels, UIMessages, UIDialogSizes, UIPlacehol
 from .dialogs import ImageDialog, ModelessSectionDialog
 from .main_image import create_tab1_ui
 from .main_settings import create_tab3_ui
+from ..uilogic.dispatcher import EventDispatcher
 
 # --- 新設・同元化する状態管理とUI基盤 ---
 from .core.state import (
@@ -146,6 +147,7 @@ class MainDockWidget(QDockWidget):
 
         # Tab 2: Digitizing state (Stateオブジェクトへ一括集約)
         self.state_store = UIStateStore(self)
+        self.dispatcher = EventDispatcher(self.state_store, self.layer_manager, self)
 
         # -----------------------------------------------------------------
         # Step C: Controller (DigitizingLogic) の初期化とViewコールバックの登録
@@ -212,8 +214,8 @@ class MainDockWidget(QDockWidget):
         }
         self.state_store.dispatch_silent(SetDisplayFiltersAction(initial_filters))
         self._update_drawing_combo()
-        if hasattr(self, "settings_logic"):
-            self.settings_logic.update_settings_ui_from_dict()
+        if hasattr(self, "update_settings_ui"):
+            self.update_settings_ui()
 
         project = QgsProject.instance()
         if project is not None:
@@ -748,8 +750,8 @@ class MainDockWidget(QDockWidget):
         self.image_dialog.activateWindow()
 
     def _show_settings_dialog(self) -> None:
-        if hasattr(self, "settings_logic"):
-            self.settings_logic.update_settings_ui_from_dict()
+        if hasattr(self, "update_settings_ui"):
+            self.update_settings_ui()
         self.settings_dialog.show()
         self.settings_dialog.raise_()
         self.settings_dialog.activateWindow()
