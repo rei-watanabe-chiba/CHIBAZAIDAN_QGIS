@@ -93,6 +93,29 @@ class BuiltPanel:
     def bind(self, hook_name: str, callback: Callable) -> None:
         for connector in self._pending_hooks.get(hook_name, []):
             connector(callback)
+    
+    def auto_bind(self, dispatcher: Any, action_mapping: Dict[str, Callable[..., Any]]) -> None:
+        """
+        PanelSpecのイベントフック名に対応するUIActionを自動発行し、
+        EventDispatcher (または dispatch メソッドを持つオブジェクト) へ送信するバインディングを構築する。
+
+        Args:
+            dispatcher: EventDispatcher などのディスパッチ機能を持つインスタンス
+            action_mapping: { "hook_name": (*args) -> UIAction } 形式の辞書
+        """
+        for hook_name, action_factory in action_mapping.items():
+            if hook_name not in self._pending_hooks:
+                continue
+                
+            # クロージャの遅延評価問題を防ぐためのコールバック生成関数
+            def create_bound_callback(factory=action_factory, disp=dispatcher):
+                def callback(*args):
+                    action = factory(*args)
+                    if action is not None:
+                        disp.dispatch(action)
+                return callback
+            
+            self.bind(hook_name, create_bound_callback())
 
     def get_value(self, field_id: str) -> Any:
         widget_type = self._field_types[field_id]

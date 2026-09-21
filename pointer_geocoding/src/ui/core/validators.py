@@ -35,14 +35,15 @@ class ValidationResult:
     """Common return type for all Validator.validate() calls.
 
     :ivar is_valid: True if the checked value passed validation.
-    :ivar message: Optional description of the failure (callers are free to
-        ignore this and display their own existing error message instead;
-        it is provided for callers that do not already have a bespoke
-        message).
+    :ivar message: Optional description of the failure.
+    :ivar focus_field_id: Optional identifier of the field that should receive focus upon failure.
+    :ivar detail_message: Optional detailed information about the failure (e.g. for logging).
     """
 
     is_valid: bool
     message: str = ""
+    focus_field_id: Optional[str] = None
+    detail_message: str = ""
 
 
 class Validator(ABC):
@@ -61,13 +62,14 @@ class Validator(ABC):
 class RequiredValidator(Validator):
     """Fails when the (string) value is empty or whitespace-only."""
 
-    def __init__(self, message: str = "") -> None:
+    def __init__(self, message: str = "", focus_field_id: Optional[str] = None) -> None:
         self.message = message
+        self.focus_field_id = focus_field_id
 
     def validate(self, value) -> ValidationResult:
         text = value.strip() if isinstance(value, str) else value
         if not text:
-            return ValidationResult(False, self.message)
+            return ValidationResult(False, self.message, focus_field_id=self.focus_field_id)
         return ValidationResult(True)
 
 
@@ -82,18 +84,23 @@ class RegexValidator(Validator):
     """
 
     def __init__(
-        self, pattern: str, reject_if_match: bool = True, message: str = ""
+        self, 
+        pattern: str, 
+        reject_if_match: bool = True, 
+        message: str = "", 
+        focus_field_id: Optional[str] = None
     ) -> None:
         self.pattern = pattern
         self.reject_if_match = reject_if_match
         self.message = message
+        self.focus_field_id = focus_field_id
 
     def validate(self, value) -> ValidationResult:
         text = value if isinstance(value, str) else str(value)
         matched = re.search(self.pattern, text) is not None
         is_valid = (not matched) if self.reject_if_match else matched
         if not is_valid:
-            return ValidationResult(False, self.message)
+            return ValidationResult(False, self.message, focus_field_id=self.focus_field_id)
         return ValidationResult(True)
 
 
@@ -107,13 +114,19 @@ class DuplicateValidator(Validator):
         membership test (dict-key lookup, feature scan, etc.).
     """
 
-    def __init__(self, exists_check: Callable[..., bool], message: str = "") -> None:
+    def __init__(
+        self, 
+        exists_check: Callable[..., bool], 
+        message: str = "", 
+        focus_field_id: Optional[str] = None
+    ) -> None:
         self.exists_check = exists_check
         self.message = message
+        self.focus_field_id = focus_field_id
 
     def validate(self, value) -> ValidationResult:
         if self.exists_check(value):
-            return ValidationResult(False, self.message)
+            return ValidationResult(False, self.message, focus_field_id=self.focus_field_id)
         return ValidationResult(True)
 
 
@@ -130,6 +143,10 @@ def show_validation_error(
     into a couple of lines. Does nothing when ``result.is_valid`` is True,
     so callers can call this unconditionally and still need their own
     ``if not result.is_valid: return`` for early-exit control flow.
+    
+    Future: callers integrated with EventDispatcher may prefer utilizing
+    `result.focus_field_id` to route focus entirely through the StateStore,
+    obsoleting the direct `focus_widget` parameter.
 
     :param parent: Parent widget for the message box (may be None).
     :param title: Message box title (e.g. ``UIMessages.ERR_TITLE_INPUT``).

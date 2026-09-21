@@ -22,6 +22,7 @@ class UIState:
     point_info_has_error: bool = False
     is_out_of_bounds: bool = False
     status_message: str = ""
+    error_focus_field: Optional[str] = None  # [追加] エラー発生時のフォーカス対象フィールドID
     
     # 4. キャッシュ・表示データ
     focus_active: bool = False
@@ -44,7 +45,7 @@ class UIState:
     is_processing: bool = False
     digitizing_inputs: Dict[str, Any] = field(default_factory=dict)
     
-    # 8. 出力 (Tab4) 状態 (新規追加)
+    # 8. 出力 (Tab4) 状態
     output_encoding: int = 0  # 0: UTF-8, 1: Shift-JIS
     output_csv_path: str = ""
 
@@ -119,6 +120,7 @@ class SetPointInfoSummaryAction(UIAction):
 class SetValidationAction(UIAction):
     has_error: bool
     message: str
+    focus_field_id: Optional[str] = None  # [追加] エラー対象のフィールドID
 
 @dataclass
 class SetPointInfoErrorAction(UIAction):
@@ -133,8 +135,16 @@ class SetSuppressCommitAction(UIAction):
 class ResetSelectionAction(UIAction):
     pass
 
+@dataclass
+class SetProcessingAction(UIAction):
+    is_processing: bool
+
+@dataclass
+class UpdateDigitizingInputsAction(UIAction):
+    inputs: Dict[str, Any]
+
 # ==========================================
-# 出力 (Tab4) 系 Action (新規追加)
+# 出力 (Tab4) 系 Action
 # ==========================================
 @dataclass
 class UpdateOutputSettingsAction(UIAction):
@@ -158,7 +168,37 @@ class UIStateStore(QObject):
     def dispatch(self, action: UIAction) -> None:
         self._apply_action(action, emit_signal=True)
 
-    def _apply_action(self, action: UIAction, emit_signal: bool = True) -> None:
+    def dispatch_batch(self, actions: List[UIAction]) -> None:
+        """
+        複数のUIActionを一括適用し、変更差分を統合して1回のみ state_changed シグナルを発行する。
+        EventDispatcherのパイプライン処理等で使用する。
+        
+        Args:
+            actions: 適用するUIActionのリスト
+        """
+        if not actions:
+            return
+            
+        all_diff = {}
+        for action in actions:
+            diff = self._apply_action(action, emit_signal=False)
+            if diff:
+                all_diff.update(diff)
+                
+        if all_diff:
+            self.state_changed.emit(self._state, all_diff)
+
+    def _apply_action(self, action: UIAction, emit_signal: bool = True) -> dict:
+        """
+        アクションを現在の状態に適用し、差分を返す。
+        
+        Args:
+            action: 適用するUIAction
+            emit_signal: 状態変更後にシグナルを発行するかどうか
+            
+        Returns:
+            更新された状態の差分辞書
+        """
         new_state_kwargs = {}
         
         # モード・選択切り替え系
@@ -206,6 +246,7 @@ class UIStateStore(QObject):
         elif isinstance(action, SetValidationAction):
             new_state_kwargs['has_input_error'] = action.has_error
             new_state_kwargs['status_message'] = action.message
+            new_state_kwargs['error_focus_field'] = action.focus_field_id
         elif isinstance(action, SetPointInfoErrorAction):
             new_state_kwargs['point_info_has_error'] = action.has_error
             new_state_kwargs['is_out_of_bounds'] = action.is_out_of_bounds
@@ -218,7 +259,7 @@ class UIStateStore(QObject):
             current_inputs.update(action.inputs)
             new_state_kwargs['digitizing_inputs'] = current_inputs
         
-        # 出力 (Tab4) 系 (新規追加)
+        # 出力 (Tab4) 系
         elif isinstance(action, UpdateOutputSettingsAction):
             if action.encoding is not None:
                 new_state_kwargs['output_encoding'] = action.encoding
@@ -232,22 +273,17 @@ class UIStateStore(QObject):
             new_state_kwargs['is_out_of_bounds'] = False
             new_state_kwargs['point_info_has_error'] = False
             new_state_kwargs['has_digitized_with_branch'] = False
+            new_state_kwargs['has_input_error'] = False
+            new_state_kwargs['error_focus_field'] = None
 
-        if not new_state_kwargs:
-            return
-
-        new_state = replace(self._state, **new_state_kwargs)
-        
-        diff = {k: v for k, v in new_state_kwargs.items() if getattr(self._state, k) != v}
-                
-        if diff:
-            self._state = new_state
-            if emit_signal:
-                self.state_changed.emit(self._state, diff)
-@dataclass
-class SetProcessingAction(UIAction):
-    is_processing: bool
-
-@dataclass
-class UpdateDigitizingInputsAction(UIAction):
-    inputs: Dict[str, Any]
+        diff = {}
+        if new_state_kwargs:
+            new_state = replace(self._state, **new_state_kwargs)
+            diff = {k: v for k, v in new_state_kwargs.items() if getattr(self._state, k) != v}
+                    
+            if diff:
+                self._state = new_state
+                if emit_signal:
+                    self.state_changed.emit(self._state, diff)
+                    
+        return diff
