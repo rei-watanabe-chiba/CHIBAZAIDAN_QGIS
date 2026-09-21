@@ -354,7 +354,7 @@ class SymbologyMixin:
         if not layer or not layer.isValid():
             return
 
-        from ..ui.dock import UIConfig
+        from ..ui.main_dock import UIConfig
 
         # Resolve display values from settings or UIConfig defaults
         sym_size    = float((settings or {}).get("ref_symbol_size",       (settings or {}).get("symbol_size", UIConfig.SYMBOL_SIZE_REF)))
@@ -498,11 +498,17 @@ class SymbologyMixin:
         else:
             ex_expr = f"({' OR '.join(ex_parts)})"
 
-        # 3. 対象図面条件 (指定がある場合のみ追加)
-        d_name = (filters.get("drawing_name") or "").strip()
+        # 3. 対象図面条件 (target_drawing_name が None ではない場合に追加)
+        target_drawing = filters.get("target_drawing_name")
         drawing_expr = None
-        if d_name and d_name != "-- 未指定 --":
-            drawing_expr = f"\"drawing_name\" = '{_escape_sql(d_name)}'"
+        
+        if target_drawing is not None:
+            d_name = target_drawing.strip()
+            if not d_name or d_name == "-- 未指定 --":
+                # 未指定時は、図面に紐づいていない（NULLまたは空）点を抽出
+                drawing_expr = "(\"drawing_name\" IS NULL OR \"drawing_name\" = '')"
+            else:
+                drawing_expr = f"\"drawing_name\" = '{_escape_sql(d_name)}'"
 
         conditions = [attr_expr, ex_expr]
         if drawing_expr:

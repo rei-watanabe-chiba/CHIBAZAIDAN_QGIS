@@ -223,7 +223,7 @@ class ImageGeorefTool(QgsMapTool):
 
         # Import UIConfig lazily to avoid circular imports if any, or directly if okay.
         # Actually it's easier to just use hardcoded default or import.
-        from ..ui.dock import UIConfig
+        from ..ui.main_dock import UIConfig
 
         marker = QgsVertexMarker(self.canvas)
         marker.setIconType(QgsVertexMarker.ICON_CROSS)
@@ -443,7 +443,8 @@ class CanvasDigitizingTool(QgsMapTool):
         attr_cache = getattr(lm, "attr_cache", {})
 
         if is_focus_active:
-            req_drawing = (focus_filter.get("drawing_name") or "").strip()
+            target_drawing = focus_filter.get("target_drawing_name")
+            req_drawing = target_drawing.strip() if target_drawing is not None else None
             if req_drawing == "-- 未指定 --":
                 req_drawing = ""
 
@@ -470,9 +471,14 @@ class CanvasDigitizingTool(QgsMapTool):
                     c_feature = cached.get("feature_name", "").strip()
                     c_attribute = cached.get("attribute_type", "").strip()
 
-                    # 1. 図面判定 (req_drawing が指定されている場合のみ一致を確認)
-                    if req_drawing and c_drawing != req_drawing:
-                        continue
+                    # 1. 図面判定
+                    if req_drawing is not None:
+                        if not req_drawing:
+                            if c_drawing:  # 未指定が選択されているのに図面名を持つものは除外
+                                continue
+                        else:
+                            if c_drawing != req_drawing:  # 特定図面が選択されているのに一致しないものは除外
+                                continue
 
                     # 2. 属性判定
                     if req_attrs is not None and c_attribute not in req_attrs:
@@ -512,13 +518,13 @@ class CanvasDigitizingTool(QgsMapTool):
             return None
 
         # First try to find among valid_ids (focused)
-        if is_focus_active and valid_ids:
-            best = find_best(valid_ids)
-            if best is not None:
-                return best
-
-        # Fallback to all candidate_ids if not focused or no focused items found
-        return find_best(candidate_ids)
+        if is_focus_active:
+            # フィルターON時は、条件に合致した(valid_ids)フィーチャのみを対象とする
+            # （対象外フィーチャへのフォールバック検索は行わない）
+            return find_best(valid_ids)
+        else:
+            # フィルターOFF時は、周辺の全フィーチャ(candidate_ids)を対象とする
+            return find_best(candidate_ids)
 
     def find_nearest_feature(
         self, layer: QgsVectorLayer, map_point: QgsPointXY
@@ -575,7 +581,14 @@ class CanvasDigitizingTool(QgsMapTool):
                 self.hover_marker.hide()
             return
 
-        mode = getattr(self.dock_widget, "tab2_current_mode", "new")
+        mode = "new"
+        if self.dock_widget:
+            if hasattr(self.dock_widget, "state_store"):
+                mode = self.dock_widget.state_store.state.tab2_mode
+            elif hasattr(self.dock_widget, "tab2_state"):
+                mode = self.dock_widget.tab2_state.current_mode
+            else:
+                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
         if mode not in ("new", "edit"):
             mode = "new"
 
@@ -642,7 +655,14 @@ class CanvasDigitizingTool(QgsMapTool):
         if not self.dock_widget:
             return
 
-        mode = getattr(self.dock_widget, "tab2_current_mode", "new")
+        mode = "new"
+        if self.dock_widget:
+            if hasattr(self.dock_widget, "state_store"):
+                mode = self.dock_widget.state_store.state.tab2_mode
+            elif hasattr(self.dock_widget, "tab2_state"):
+                mode = self.dock_widget.tab2_state.current_mode
+            else:
+                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
         if mode not in ("new", "edit"):
             mode = "new"
 

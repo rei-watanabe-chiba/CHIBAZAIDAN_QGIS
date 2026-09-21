@@ -24,7 +24,10 @@ from qgis.core import (
     QgsSpatialIndex,
     NULL,
 )
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QVariant, QMetaType
+TYPE_INT = QMetaType.Type.Int if hasattr(QMetaType, "Type") else QMetaType.Int
+TYPE_STRING = QMetaType.Type.QString if hasattr(QMetaType, "Type") else QMetaType.QString
+TYPE_DOUBLE = QMetaType.Type.Double if hasattr(QMetaType, "Type") else QMetaType.Double
 
 from .models import get_local_crs
 
@@ -70,20 +73,20 @@ class GpkgCacheMixin:
         point_layer.setCrs(local_crs)
         point_pr = point_layer.dataProvider()
         point_fields = [
-            QgsField("point_id", QVariant.Int),
-            QgsField("drawing_name", QVariant.String),
-            QgsField("excavation_type", QVariant.String),
-            QgsField("feature_name", QVariant.String),
-            QgsField("color_code", QVariant.String),
-            QgsField("attribute_type", QVariant.String),
-            QgsField("point_name", QVariant.String),
-            QgsField("branch_no", QVariant.String),
-            QgsField("canvas_x", QVariant.Double),
-            QgsField("canvas_y", QVariant.Double),
-            QgsField("real_x", QVariant.Double),
-            QgsField("real_y", QVariant.Double),
-            QgsField("pixel_x", QVariant.Double),
-            QgsField("pixel_y", QVariant.Double),
+            QgsField("point_id", TYPE_INT),
+            QgsField("drawing_name", TYPE_STRING),
+            QgsField("excavation_type", TYPE_STRING),
+            QgsField("feature_name", TYPE_STRING),
+            QgsField("color_code", TYPE_STRING),
+            QgsField("attribute_type", TYPE_STRING),
+            QgsField("point_name", TYPE_STRING),
+            QgsField("branch_no", TYPE_STRING),
+            QgsField("canvas_x", TYPE_DOUBLE),
+            QgsField("canvas_y", TYPE_DOUBLE),
+            QgsField("real_x", TYPE_DOUBLE),
+            QgsField("real_y", TYPE_DOUBLE),
+            QgsField("pixel_x", TYPE_DOUBLE),
+            QgsField("pixel_y", TYPE_DOUBLE),
         ]
         point_pr.addAttributes(point_fields)
         point_layer.updateFields()

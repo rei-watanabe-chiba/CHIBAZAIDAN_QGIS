@@ -233,7 +233,24 @@ class CoordinateTransformer:
 
             return (float(A), float(B), float(C), float(D), float(E), float(F))
 
-        except Exception as e:          
+        except Exception as e:
+            import traceback
+            from qgis.core import QgsMessageLog, Qgis
+            
+            # デバッグ用の詳細情報を構築
+            debug_msg = (
+                f"=== 3点/4点変換エラー詳細 ===\n"
+                f"local_points: {local_points}\n"
+                f"real_points: {real_points}\n"
+                f"Exception: {str(e)}\n"
+                f"Traceback:\n{traceback.format_exc()}\n"
+                f"============================="
+            )
+            
+            # QGISのメッセージログとPythonコンソールの両方に出力
+            QgsMessageLog.logMessage(debug_msg, "PointerGeocoding", Qgis.Critical)
+            print(debug_msg)
+            
             # 最適化に失敗した場合のフォールバック（通常の最小二乗アフィン）
             if 'aff_res' in locals():
                 return (float(A0), float(B0), float(C0), float(D0), float(E0), float(F0))
