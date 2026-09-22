@@ -287,16 +287,35 @@ class DigitizingLogic(QObject):
         
         is_valid, coords = self.validate_drawing_bounds(drawing_name, map_point)
         return self._create_point(inputs, map_point, coords, drawing_name)
+    
+    def apply_next_point_number(self) -> Optional[UIAction]:
+        """現在のカテゴリに基づき最新の連番（最新point_idのpoint_name+1）を計算してActionを返す"""
+        state = self.state_store.state
+        inputs = state.digitizing_inputs
+        ex_type = inputs.get("excavation_type", ExcavationType.GRID.value)
+        feat_name = inputs.get("feature_name", "")
+        # attribute_code / attribute_type の両方のキーに対応
+        attr_code = inputs.get("attribute_code") or inputs.get("attribute_type", "")
+        is_sp = (attr_code == AttributeType.SP.value)
+        
+        if state.autonum_mode == "auto" and not is_sp:
+            next_pname = self.calculate_next_point_number(ex_type, feat_name, is_sp)
+            return UpdateDigitizingInputsAction({"point_name": next_pname})
+        return None
 
-    def _create_point(self, inputs: Dict[str, Any], map_point: QgsPointXY, pixel_coords: Optional[Tuple[float, float]], drawing_name: str) -> List[UIAction]:
+    def _create_point(
+        self, inputs: Dict[str, Any], map_point: QgsPointXY, pixel_coords: Optional[Tuple[float, float]], drawing_name: str
+    ) -> List[UIAction]:
         """新規点を生成してレイヤに書き込む共通内部メソッド"""
         next_id = get_next_point_id(self.point_layer)
+        attr_code = inputs.get("attribute_code") or inputs.get("attribute_type", "")
+        
         feat_dict = {
             "drawing_name": drawing_name if drawing_name != UILabels.DRAWING_UNSPECIFIED else "",
             "excavation_type": inputs.get("excavation_type", ""),
             "feature_name": inputs.get("feature_name", "") if inputs.get("excavation_type") == ExcavationType.FEATURE.value else "",
             "color_code": self.state_store.state.current_feature_color,
-            "attribute_type": inputs.get("attribute_type", ""),
+            "attribute_type": attr_code,
             "point_name": inputs.get("point_name", ""),
             "branch_no": inputs.get("branch_no", ""),
         }
@@ -311,12 +330,19 @@ class DigitizingLogic(QObject):
                 self.refresh_canvas_cb()
                 
         has_branch = bool(feat_dict["branch_no"])
-        
-        # 新規作成後はバリデーションを再発行してUIを同期する
-        return [
-            SetDigitizedWithBranchAction(has_branch=has_branch),
-            ValidateDigitizingInputsAction()
+        actions: List[UIAction] = [
+            SetDigitizedWithBranchAction(has_branch=has_branch)
         ]
+        
+        # 【重要】 打刻成功後、枝番がなくSP属性でなく自動採番モードの場合、次の連番を自動計算してActionを発行する
+        is_sp = (attr_code == AttributeType.SP.value)
+        if not has_branch and not is_sp and self.state_store.state.autonum_mode == "auto":
+            autonum_action = self.apply_next_point_number()
+            if autonum_action:
+                actions.append(autonum_action)
+            
+        actions.append(ValidateDigitizingInputsAction())
+        return actions
 
     def handle_delete_point(self, action: DeletePointAction) -> Optional[List[UIAction]]:
         """指定されたIDの点を削除する"""

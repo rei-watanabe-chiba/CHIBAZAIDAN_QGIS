@@ -185,7 +185,13 @@ class GeorefLogic(QObject):
 
         image_dialog = self.get_image_dialog_cb()
         if image_dialog:
-            image_dialog.setup_raster(raster_layer, on_point_clicked_cb, self.state_store.state.ref_points_data)
+            ref_points_data = self.state_store.state.ref_points_data
+            image_dialog.setup_raster(raster_layer, on_point_clicked_cb, ref_points_data)
+            # setup_raster()冒頭のclean_up()で古いImageGeorefToolのマーカーは全消去され、
+            # 新規ImageGeorefToolにはset_ref_points_data()によるスナップ用データしか渡らない
+            # （マーカーシンボル自体は生成されない）ため、ここで明示的に再構築する。
+            for rdata in ref_points_data:
+                image_dialog.add_marker(rdata["pixel_x"], rdata["pixel_y"], rdata.get("name", ""))
             image_dialog.show()
             image_dialog.raise_()
             image_dialog.activateWindow()

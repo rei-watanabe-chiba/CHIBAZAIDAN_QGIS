@@ -219,8 +219,11 @@ class MainDockWidget(QDockWidget):
 
         self._update_main_map_tool_state()
 
-        # 初期バリデーション発行
+        # 初期バリデーション発行、起動時の最新IDに基づく自動連番計算と入力同期
         if self.point_layer and self.point_layer.isValid():
+            autonum_action = self.digitizing_logic.apply_next_point_number()
+            if autonum_action:
+                self.dispatcher.dispatch(autonum_action)
             self._update_digitizing_inputs_to_state()
         
         # 初期化フェーズの最後に全UIを強制同期
@@ -466,10 +469,15 @@ class MainDockWidget(QDockWidget):
             combo.blockSignals(False)
 
         if "digitizing_inputs" in diff:
+            focus_w = QApplication.focusWidget()
             for field_id, value in new_state.digitizing_inputs.items():
                 panel = self.panel_point_info if field_id in ["point_name", "point_name_sp", "branch_no"] else self.panel_attribute
                 if panel and panel._field_types.get(field_id):
                     widget = panel.get(field_id)
+                    # 入力中のウィジェットへの強制書き戻しを回避（タイピング阻害の防止）
+                    if focus_w and (focus_w == widget or widget.isAncestorOf(focus_w)):
+                        continue
+                    
                     widget.blockSignals(True)
                     if field_id == "attribute_code":
                         idx = widget.findData(value)
@@ -517,14 +525,16 @@ class MainDockWidget(QDockWidget):
         if is_sp:
             if not buttons[1].isChecked():
                 buttons[1].setChecked(True)
-            buttons[0].setEnabled(False)
+            buttons.setEnabled(False)
             buttons[1].setEnabled(False)
         else:
-            buttons[0].setEnabled(True)
+            buttons.setEnabled(True)
             buttons[1].setEnabled(True)
             
         if self.state_store.state.selected_point_id is None:
-            self.digitizing_logic.apply_next_point_number()
+            autonum_action = self.digitizing_logic.apply_next_point_number()
+            if autonum_action:
+                self.dispatcher.dispatch(autonum_action)
         self._update_digitizing_inputs_to_state()
 
     def _on_excavation_changed(self, *args):
@@ -532,7 +542,9 @@ class MainDockWidget(QDockWidget):
         self.panel_attribute.get_row("feature_name").setVisible(is_feat)
         self.panel_attribute.get_row("feature_actions").setVisible(is_feat)
         if self.state_store.state.selected_point_id is None:
-            self.digitizing_logic.apply_next_point_number()
+            autonum_action = self.digitizing_logic.apply_next_point_number()
+            if autonum_action:
+                self.dispatcher.dispatch(autonum_action)
         self._update_digitizing_inputs_to_state()
 
     def _update_point_info_status_ui(self, state):
