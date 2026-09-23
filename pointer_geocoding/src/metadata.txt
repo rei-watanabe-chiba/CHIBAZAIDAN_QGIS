@@ -1,0 +1,14 @@
+[general]
+name=点群座標取得
+plugin_id=pointer_geocoding
+description=アナログ図面上の連続打刻から基準点座標変換・CSV出力を行うQGISプラグイン
+about=アナログ画像上で連続打刻を行い、基準点によるアフィン/ヘルマート座標変換およびCSV出力までの全工程をセッション管理下で自動化します。
+version=2.3.0
+qgisMinimumVersion=3.22
+qgisMaximumVersion=3.99
+author=Rei
+email=developer@example.com
+icon=icon.svg
+category=Vector
+experimental=False
+deprecated=False
