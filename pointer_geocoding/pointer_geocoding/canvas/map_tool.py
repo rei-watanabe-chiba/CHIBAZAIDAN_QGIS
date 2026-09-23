@@ -280,10 +280,10 @@ class CanvasDigitizingTool(QgsMapTool):
     # MainDockWidget._on_canvas_clicked, not by this tool.
     canvas_clicked = pyqtSignal(QgsPointXY)
     existing_point_selected = pyqtSignal(dict)
-    # T-0039: emitted when a blank-space click occurs while in edit mode
+    # Emitted when a blank-space click occurs while in edit mode
     # (snap-to-existing-feature detection missed). Edit mode itself is
     # kept; only the dock widget's currently-selected feature should be
-    # deselected in response (see Tab2DigitizingMixin._reset_point_selection).
+    # deselected in response.
     blank_click_in_edit_mode = pyqtSignal()
 
     def __init__(
@@ -320,11 +320,11 @@ class CanvasDigitizingTool(QgsMapTool):
         self.hover_marker.setIconSize(14)
         self.hover_marker.hide()
 
-        # T-0023: Selected-point marker (same red box style as hover_marker),
+        # Selected-point marker (same red box style as hover_marker),
         # displayed persistently while an existing point is selected for
         # editing/number-correction/deletion, independent of mouse hover.
         # Cleared on: selecting another point, a plain canvas click, or the
-        # dock's "reset" button (see MainDockWidget._reset_point_selection).
+        # dock's "reset" button.
         self.selected_marker = QgsVertexMarker(self.canvas)
         self.selected_marker.setIconType(QgsVertexMarker.ICON_BOX)
         self.selected_marker.setColor(QColor("#D32F2F"))
@@ -337,9 +337,16 @@ class CanvasDigitizingTool(QgsMapTool):
         self._focus_active: bool = False
         self._focus_filter: Dict[str, str] = {}
 
-        # Initialize categorised symbology for point layer (T-0017: symbology
-        # construction now lives in SymbologyMixin/symbology_mixin.py, mixed
-        # into LayerManager; this tool only delegates to it).
+        # Tab2 digitizing mode cache ("new" / "edit"), pushed one-way from
+        # MainDockWidget via update_tab2_mode() whenever state_store.state.tab2_mode
+        # changes. This tool must never read dock_widget/state_store directly
+        # (Core_Architecture_UIUX.md section 2: input modules only push events
+        # out, they never pull UI state in).
+        self._tab2_mode: str = "new"
+
+        # Initialize categorised symbology for point layer (symbology
+        # construction lives in layer/symbology.py, delegated to via
+        # self.layer_manager).
         if self.layer_manager and hasattr(self.layer_manager, "apply_point_symbology"):
             current_settings = (
                 self.layer_manager.load_settings()
@@ -362,7 +369,7 @@ class CanvasDigitizingTool(QgsMapTool):
         super().deactivate()
 
     def show_selected_marker(self, map_point: QgsPointXY) -> None:
-        """Display the persistent selection marker at the given point (T-0023).
+        """Display the persistent selection marker at the given point.
 
         :param map_point: Location of the selected existing point (canvas coordinates).
         :type map_point: QgsPointXY
@@ -372,7 +379,7 @@ class CanvasDigitizingTool(QgsMapTool):
             self.selected_marker.show()
 
     def clear_selected_marker(self) -> None:
-        """Hide the persistent selection marker (T-0023).
+        """Hide the persistent selection marker.
 
         Called when selection is cleared: another point is selected (marker is
         immediately repositioned instead), a plain canvas click occurs, or the
@@ -395,12 +402,23 @@ class CanvasDigitizingTool(QgsMapTool):
         self._focus_active = bool(active)
         self._focus_filter = dict(filters) if filters else {}
 
-    # T-0017: setup_point_layer_symbology/setup_ref_point_layer_symbology/
-    # update_attribute_transparency were moved to SymbologyMixin
-    # (symbology_mixin.py) as apply_point_symbology/apply_ref_point_cross_symbology/
-    # apply_attribute_transparency, reached via self.layer_manager. This tool's
-    # responsibility is now limited to geometry selection and canvas interaction;
-    # symbology details are consolidated in symbology_mixin.py.
+    def update_tab2_mode(self, mode: str) -> None:
+        """Receive the Tab2 digitizing mode pushed from MainDockWidget and cache it locally.
+
+        Called by MainDockWidget whenever state_store.state.tab2_mode changes
+        (see _on_state_changed), so this tool never needs to read
+        dock_widget.state_store (or any UI state) directly to decide how
+        canvasMoveEvent/_handle_digitize_click should branch.
+
+        :param mode: New digitizing mode, expected to be "new" or "edit".
+        :type mode: str
+        """
+        self._tab2_mode = mode if mode in ("new", "edit") else "new"
+
+    # Symbology construction/styling (apply_point_symbology) lives in
+    # layer/symbology.py, reached via self.layer_manager. This tool's
+    # responsibility is limited to geometry selection and canvas
+    # interaction.
 
     def find_nearest_feature_id(
         self, map_point: QgsPointXY
@@ -570,27 +588,22 @@ class CanvasDigitizingTool(QgsMapTool):
     def canvasMoveEvent(self, event: QgsMapMouseEvent) -> None:
         """Handle mouse movement: highlight nearby points within 15px tolerance using QgsSpatialIndex.
 
-        T-0039b: mirrors the mode branching in _handle_digitize_click(). In
+        Mirrors the mode branching in _handle_digitize_click(). In
         "new" mode, snap detection is skipped entirely so no hover marker
         is ever shown (consistent with clicks never snapping to existing
         features in this mode). In "edit" mode, hover snap detection and
         the red hover marker remain unchanged.
+
+        Uses the mode cached locally via update_tab2_mode() (pushed one-way
+        from MainDockWidget); this tool never reads dock_widget.state_store
+        directly.
         """
         if getattr(self, "_interaction_locked", False):
             if hasattr(self, "hover_marker") and self.hover_marker:
                 self.hover_marker.hide()
             return
 
-        mode = "new"
-        if self.dock_widget:
-            if hasattr(self.dock_widget, "state_store"):
-                mode = self.dock_widget.state_store.state.tab2_mode
-            elif hasattr(self.dock_widget, "tab2_state"):
-                mode = self.dock_widget.tab2_state.current_mode
-            else:
-                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
-        if mode not in ("new", "edit"):
-            mode = "new"
+        mode = self._tab2_mode
 
         if mode == "new":
             if getattr(self, "hover_marker", None) is not None:
@@ -635,36 +648,29 @@ class CanvasDigitizingTool(QgsMapTool):
     def _handle_digitize_click(self, map_point: QgsPointXY) -> None:
         """Process click event on main georeferenced canvas.
 
-        T-0037: click behavior now branches on the dock widget's
-        tab2_current_mode ("new" / "edit", set by
-        Tab2DigitizingMixin._on_tab2_mode_changed):
+        Click behavior branches on the dock widget's tab2_current_mode
+        ("new" / "edit"), pushed one-way from MainDockWidget:
 
         - "new" mode: existing-feature snap detection is skipped entirely;
           every click is treated as a plain canvas click and forwarded to
           MainDockWidget._on_canvas_clicked for new-point digitizing.
         - "edit" mode: only existing-feature snap detection is performed;
           a hit selects the point via existing_point_selected as before.
-          A miss (blank click) never creates a new point; per T-0039 it
-          emits blank_click_in_edit_mode so the dock widget can clear the
+          A miss (blank click) never creates a new point; it emits
+          blank_click_in_edit_mode so the dock widget can clear the
           current selection while remaining in edit mode.
 
         Falls back to "new" mode if tab2_current_mode is missing or holds
-        an unexpected value (defensive default, mirroring T-0036's
-        default_index=0 = new mode).
+        an unexpected value (defensive default).
+
+        Uses the mode cached locally via update_tab2_mode() (pushed one-way
+        from MainDockWidget); this tool never reads dock_widget.state_store
+        directly.
         """
         if not self.dock_widget:
             return
 
-        mode = "new"
-        if self.dock_widget:
-            if hasattr(self.dock_widget, "state_store"):
-                mode = self.dock_widget.state_store.state.tab2_mode
-            elif hasattr(self.dock_widget, "tab2_state"):
-                mode = self.dock_widget.tab2_state.current_mode
-            else:
-                mode = getattr(self.dock_widget, "tab2_current_mode", "new")
-        if mode not in ("new", "edit"):
-            mode = "new"
+        mode = self._tab2_mode
 
         if mode == "new":
             # New mode: always a plain canvas click, no snap-to-existing-
@@ -678,7 +684,7 @@ class CanvasDigitizingTool(QgsMapTool):
             return
 
         # Edit mode: only snap-to-existing-feature selection; a blank-space
-        # click never creates a new point, but per T-0039 it does emit
+        # click never creates a new point, but it does emit
         # blank_click_in_edit_mode so the dock widget clears the current
         # selection (the mode itself stays "edit").
         nearest = self.find_nearest_feature_id(map_point)
@@ -703,14 +709,14 @@ class CanvasDigitizingTool(QgsMapTool):
                     "canvas_y": feat["canvas_y"],
                     "feature_id": feat.id(),
                 }
-                # T-0023: show the persistent selection marker at the hit point's
+                # Show the persistent selection marker at the hit point's
                 # exact stored location (independent of hover, remains until
                 # selection changes).
                 self.show_selected_marker(QgsPointXY(feat["canvas_x"], feat["canvas_y"]))
                 self.existing_point_selected.emit(data)
         else:
             # Blank click while in edit mode: keep edit mode active, but let
-            # the dock widget clear any currently-selected feature (T-0039).
+            # the dock widget clear any currently-selected feature.
             self.blank_click_in_edit_mode.emit()
 
     def clean_up(self) -> None:

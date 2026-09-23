@@ -3,7 +3,7 @@
  PointerGeocoding Plugin - CoreUI builder (PanelSpec -> real widgets)
  ***************************************************************************/
 
-T-0045: CoreUIBuilder.build(spec, parent) turns a declarative PanelSpec
+CoreUIBuilder.build(spec, parent) turns a declarative PanelSpec
 (field_spec.py) into a real vertical stack of PyQt widgets, one row per
 FieldSpec, reusing UIStyleHelper's existing row/button/table helpers
 (ui/style.py) as the actual widget factories. This module is a thin layer

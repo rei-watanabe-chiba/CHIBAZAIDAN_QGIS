@@ -3,13 +3,11 @@
  PointerGeocoding Plugin - Main Dock UI Constants
  ***************************************************************************/
 
-Stage B split (mechanical, logic-preserving): extracted from main_dock.py.
-Contains UI string/config constant classes shared across MainDockWidget,
-its tab mixins, and the standalone dialog classes in main_dock_dialogs.py.
+UI string/config constant classes shared across the dock and dialog modules.
 
-T-0017 (アプローチA): EXCAVATION_OPTIONS/ATTRIBUTE_OPTIONS は core_logic.py の
-ExcavationType/AttributeType Enum の .value から構築し、コンボボックス文字列と
-Enum定義の単一情報源化を図る（一覧の中身・順序は変更前と同一）。
+EXCAVATION_OPTIONS/ATTRIBUTE_OPTIONS are built from ExcavationType/
+AttributeType Enum's .value, keeping the combo box strings and Enum
+definition as a single source of truth.
 """
 
 from ..logic.core import ExcavationType, AttributeType
@@ -22,87 +20,53 @@ class UIConfig:
     LABEL_SIZE_REF = 10
     SYMBOL_SIZE_REF = 4.0
     SYMBOL_SIZE_POINT = 3.0
-    # --- T-0048 (人手確認フィードバック対応): fixed pixel width for
-    # tab3_settings.py's compact form-row labels (サイズ/線幅/線色/間隔), so
-    # every DOUBLE_SPINBOX_ROW/COLOR_BUTTON_ROW/SPINBOX_ROW input widget in a
-    # given ROW_GROUP starts at the same x-offset regardless of its label's
-    # character count. Sized for the widest of the four labels, "サイズ" (3
-    # full-width chars) at the UI's 9pt base font (style.py's PANEL_STYLE):
-    # a full-width glyph renders roughly at the font's em-box width (~14px
-    # at 9pt/96dpi), so 3 chars need ~42px; 44px keeps a couple of px of
-    # breathing room without being noticeably wider than the text. Not
-    # applied to the 表示縮尺 section's 大グリッド:/小グリッド: labels (out
-    # of scope per user feedback).
+    # Fixed pixel width for compact settings-panel form-row labels
+    # (サイズ/線幅/線色/間隔), so every input widget in a given ROW_GROUP
+    # starts at the same x-offset regardless of its label's character
+    # count. Sized for the widest of the four labels, "サイズ" (3 full-width
+    # chars) at the UI's 9pt base font: a full-width glyph renders roughly
+    # at the font's em-box width (~14px at 9pt/96dpi), so 3 chars need
+    # ~42px; 44px keeps a couple of px of breathing room. Not applied to
+    # the 表示縮尺 section's 大グリッド:/小グリッド: labels.
     TAB3_ROW_LABEL_WIDTH = 44
-    # --- T-0025: fixed width of the right dock (root_widget passed to
+    # Fixed width of the right dock (root_widget passed to
     # QDockWidget.setWidget in main_dock.py), so the dock no longer relies
-    # on QGIS's default auto-sizing. T-0048 (人手確認フィードバック対応):
-    # widened 300 -> 320 so tab3's now fixed-width row labels
-    # (TAB3_ROW_LABEL_WIDTH) don't crowd out the DOUBLE_SPINBOX_ROW/
-    # COLOR_BUTTON_ROW input widgets beside them. This constant is shared by
-    # the whole dock (tab1/tab2/tab3/tab4 all sit in the same root_widget),
-    # so the +20px also applies to tab1/tab2/tab4; their rows are built with
-    # stretch-ratio layouts (build_flex_row's MAIN_RATIO), so the extra
-    # width simply grows their content area proportionally and does not
-    # change any fixed-width element on those tabs. ---
+    # on QGIS's default auto-sizing. Wide enough that the settings panel's
+    # fixed-width row labels (TAB3_ROW_LABEL_WIDTH) don't crowd out the
+    # input widgets beside them. Shared by the whole dock (all tabs sit in
+    # the same root_widget), so other tabs' stretch-ratio rows simply grow
+    # their content area proportionally without any fixed-width impact.
     DOCK_WIDTH = 320
-    # --- T-0027: fixed height (~6 rows) of the 図面選択リスト panel's
-    # QListWidget, so it does not grow unbounded with many drawings and
-    # instead scrolls internally. ---
+    # Fixed height (~6 rows) of the 図面選択リスト panel's QListWidget, so
+    # it does not grow unbounded with many drawings and instead scrolls
+    # internally.
     DRAWING_LIST_HEIGHT = 180
 
-    # --- T-0035: full reset/simplification of the T-0034 margin/spacing
-    # constants. T-0034 introduced a large set of finely-subdivided margin
-    # constants (DOCK_OUTER_MARGIN, SECTION_GAP, PANEL_CONTAINER_MARGIN_TOP/
-    # BOTTOM, PANEL_GROUP_SPACING, PANEL_INNER_SPACING, SEPARATOR_MARGIN_TOP/
-    # BOTTOM); per user feedback that this subdivision added no real value,
-    # they are replaced by three simple, broadly-reused constants below
-    # (COMMON_MARGIN_LR / DIALOG_MARGIN / PANEL_MARGIN). See each call site
-    # (main_dock.py / tab1_georef_mixin.py / tab2_digitizing_mixin.py /
-    # tab3_settings_mixin.py / start_dialog.py / main_dock_dialogs.py) for
-    # how they are applied. ---
-    # Left/right margin for the top-level container of start_dialog.py,
-    # tab1_georef_mixin.py, tab3_settings_mixin.py and tab2_digitizing_mixin.
-    # py's _create_tab4_ui() (出力 dialog content).
+    # Left/right margin for top-level dialog/tab content containers.
     COMMON_MARGIN_LR = 8
-    # Top/bottom margin and vertical setSpacing() for the top-level layout of
-    # each "dialog content" widget: start_dialog.py's main_layout; the four
-    # dialog classes in main_dock_dialogs.py (ImageDialog/GridInputDialog/
-    # FeatureCreateDialog/ModelessSectionDialog); and the top-level containers
-    # of tab1_georef_mixin.py / tab3_settings_mixin.py / tab2_digitizing_mixin.
-    # py's _create_tab4_ui().
+    # Top/bottom margin and vertical spacing for "dialog content" widgets
+    # (start dialog, modal/modeless dialogs).
     DIALOG_MARGIN = 8
-    # Top/bottom/left/right margin and vertical setSpacing() for
-    # main_dock.py's root_layout (replacing the former separate
-    # DOCK_OUTER_MARGIN), and the top-level container + individual panels
-    # (info/attr/focus/drawing-list) of tab2_digitizing_mixin.py's
-    # _create_tab2_ui() (replacing the former PANEL_GROUP_SPACING/
-    # PANEL_CONTAINER_MARGIN_TOP/PANEL_CONTAINER_MARGIN_BOTTOM/
-    # PANEL_INNER_SPACING).
+    # Top/bottom/left/right margin and vertical spacing for the dock's root
+    # layout and Tab2's panel containers (info/attr/focus/drawing-list).
     PANEL_MARGIN = 8
-    # tab2_digitizing_mixin.py: layout.setContentsMargins(4, PANEL_MARGIN, 16,
-    # PANEL_MARGIN) (Tab2 panel container; left/right kept as their own
-    # dedicated constants below -- right margin is intentionally wider than
-    # the others to leave room for the QScrollArea's scrollbar).
+    # Tab2 panel container left/right margins; right is intentionally wider
+    # than the others to leave room for the QScrollArea's scrollbar.
     PANEL_CONTAINER_MARGIN_LEFT = 4
     PANEL_CONTAINER_MARGIN_RIGHT = 16
     SEPARATOR_MARGIN = 12
     HEADER_LINE_SPACING = 4
-    # main_dock.py: top_layout.setSpacing(6) (画像/設定/出力/保存 button row;
-    # kept unchanged, out of scope for the T-0035 reset).
+    # 画像/設定/出力/保存 button row spacing (top of the dock).
     TOP_ROW_BUTTON_SPACING = 6
 
 
 class UIDialogSizes:
-    """T-0025: dialog-level width/height constants for the modeless/modal
-    dialogs built in main_dock_dialogs.py, extracted from the previously
-    hardcoded resize()/setMinimumWidth() call sites so they have a single,
-    named source of truth alongside UIConfig."""
+    """Dialog-level width/height constants for the modeless/modal dialogs,
+    kept as a single named source of truth alongside UIConfig."""
 
     IMAGE_DIALOG_WIDTH = 1100
     IMAGE_DIALOG_HEIGHT = 650
     GRID_DIALOG_MIN_WIDTH = 380
-    # 【ローカル編集】ModelessSectionDialoのサイズ指定を追加
     SETTINGS_DIALOG_WIDTH = 400
     SETTINGS_DIALOG_HEIGHT = 500
     OUT_DIALOG_WIDTH = 400
@@ -111,22 +75,16 @@ class UIDialogSizes:
 class UILabels:
     DOCK_TITLE = "点群座標取得パネル"
     BTN_SAVE_PROJECT = "💾 プロジェクトを保存"
-    # --- T-0034: tab display strings shortened to English abbreviations
-    # (画像管理/遺物点作成/設定/CSV出力 -> IMG/PLOT/SET/OUT); internal module/
-    # class/variable/method identifiers (tab1/tab2/tab3/output_*) are
-    # unchanged, this only affects the strings shown in the UI. ---
+    # Tab display strings (shown in UI); internal tab1/tab2/tab3 identifiers
+    # are unrelated and unaffected by these display abbreviations.
     TAB_1_TITLE = "IMG"
     TAB_2_TITLE = "PLOT"
     TAB_3_TITLE = "SET"
-    # --- T-0024: right-dock top button row (image / settings / output / save) ---
+    # Right-dock top button row (image / settings / output / save)
     BTN_TOP_IMAGE = "画像"
     BTN_TOP_SETTINGS = "設定"
     BTN_TOP_OUTPUT = "出力"
     BTN_TOP_SAVE = "保存"
-    # --- T-0034: renamed from OUTPUT_DIALOG_TITLE to TAB_4_TITLE to align
-    # with the TAB_1_TITLE/TAB_2_TITLE/TAB_3_TITLE naming pattern used by
-    # the other three dialogs' content mixins (see main_dock.py's
-    # self.tab4_container / tab2_digitizing_mixin.py's _create_tab4_ui). ---
     TAB_4_TITLE = "OUT"
     # --- Settings Tab ---
     TAB3_SECTION_REF_SYMBOL   = "基準点"
@@ -225,9 +183,9 @@ class UILabels:
         AttributeType.C.value,
         AttributeType.SP.value,
     ]
-    # T-0032: display-only labels for combo_attribute; the underlying
-    # AttributeType values (S/P/C/SP) stored on features/used in comparisons
-    # are unchanged (see Tab2DigitizingMixin._get_attribute_value/_set_attribute_value).
+    # Display-only labels for the attribute combo box; the underlying
+    # AttributeType values (S/P/C/SP) stored on features and used in
+    # comparisons are unaffected by this mapping.
     ATTRIBUTE_DISPLAY_MAP = {
         AttributeType.S.value: "S:石器",
         AttributeType.P.value: "P:土器",
@@ -237,11 +195,10 @@ class UILabels:
     BTN_COLOR_PICKER = "カラー選択"
     GROUP_CSV = "CSV出力設定"
 
-    # --- T-0027: 4-panel main area restructure (点情報/属性/フォーカスモード/図面選択リスト) ---
+    # 4-panel main area: 点情報/属性/フォーカスモード/図面選択リスト
     GROUP_POINT_INFO = "点情報"
     GROUP_ATTRIBUTE_PANEL = "属性パネル"
     GROUP_DRAWING_LIST = "図面選択リスト"
-    # --- 軽微修正: 図面選択リストパネルへの基準点レイヤ表示/非表示トグル追加 ---
     LBL_REF_POINT_VISIBILITY = "基準点: "
     RADIO_VISIBLE = "表示"
     RADIO_HIDDEN = "非表示"
@@ -255,17 +212,16 @@ class UILabels:
     STATUS_MSG_NEW_FEATURE = "{feature} : 新規作成"
     STATUS_MSG_EDIT_FEATURE = "{feature} : 入力した設定を反映"
     NEW_FEATURE_NAME = "新規遺構名:"
-    # --- T-0040: 新規モード「解除」時のクリック位置への点名・枝番入力ダイアログ ---
+    # 新規モード「解除」時のクリック位置への点名・枝番入力ダイアログ
     POINT_NAME_ENTRY_DIALOG_TITLE = "点名・枝番入力"
-    # --- T-0032: 点情報パネル ステータス帯 文言 ---
+    # 点情報パネル ステータス帯 文言
     STATUS_NEW_POINT = "新規点作成"
     STATUS_EDIT_POINT = "既設点編集"
     STATUS_ERR_FEATURE_REQUIRED = "遺構名未指定"
     STATUS_ERR_OUT_OF_BOUNDS = "図面範囲外"
     STATUS_ERR_DUPLICATE = "点名重複エラー"
-    # --- T-0036: tab2先頭の新規/編集モード切替トグル、点情報パネルの
-    # モード連動ボタンエリア(新規モード=自動連番/解除トグル、編集モード=削除)。
-    # 命名はtab1_georef_mixin.pyの新規追加/編集削除トグルの命名パターンに揃える。 ---
+    # tab2先頭の新規/編集モード切替トグル。点情報パネルのモード連動ボタン
+    # エリア(新規モード=自動連番/解除トグル、編集モード=削除)。
     TAB2_MODE_NEW = "新規"
     TAB2_MODE_EDIT = "編集"
     AUTONUM_MODE_AUTO = "自動連番"
@@ -339,18 +295,20 @@ class UIMessages:
     MSG_RENAME_LAYER_SUCCESS = "レイヤ名を '{old}' から '{new}' に変更しました。"
     ERR_POINT_NAME_REQUIRED = "点名（点番号）を入力してください。"
     ERR_NEW_FEATURE_REQUIRED = "新規遺構名を入力してください。"
-    # --- T-0041: PointNameEntryDialog重複エラー文言を点情報パネルの
+    # PointNameEntryDialog重複エラー文言を点情報パネルの
     # UILabels.STATUS_ERR_DUPLICATE("点名重複エラー")と揃えるためのプレフィックス付き
-    # フォーマット。core_logic.build_point_ident()が返す識別子文字列と組み合わせて使う。 ---
+    # フォーマット。core_logic.build_point_ident()が返す識別子文字列と組み合わせて使う。
     ERR_POINT_NAME_DUPLICATE = UILabels.STATUS_ERR_DUPLICATE + ": {ident}"
     MSG_DELETE_SUCCESS_TITLE = "ポイント削除"
     MSG_DELETE_SUCCESS = "ポイントを削除しました。"
+    MSG_UPDATE_OUT_OF_BOUNDS_TITLE = "図面範囲外"
+    MSG_UPDATE_OUT_OF_BOUNDS = (
+        "変更先の図面のピクセル範囲外に物理座標があるため、対象図面を変更できませんでした。"
+    )
     MSG_EXPORT_CSV_TITLE = "CSV出力完了"
 
-    # --- T-0025: undefined-literal cleanup (main_dock_dialogs.py) ---
     MSG_CONFIRM_DELETE_REF = "この基準点を削除しますか？"
 
-    # --- T-0025: undefined-literal cleanup (tab1_georef_mixin.py) ---
     MSG_CONFIRM_DELETE_LAYER_TITLE = "レイヤ削除"
     MSG_CONFIRM_DELETE_LAYER = "レイヤ '{name}' を削除しますか？\n関連するファイルやメタデータも削除されます。"
     MSG_CONFIRM_POINTS_EXIST_TITLE = "ポイントが存在します"
@@ -366,13 +324,11 @@ class UIMessages:
     MSG_TRANSFORM_COMPLETE_TITLE = "座標変換完了"
     ERR_IMAGE_FILE_NOT_FOUND = "対象画像ファイルが見つかりません。"
 
-    # --- T-0025: undefined-literal cleanup (tab2_digitizing_mixin.py) ---
     ERR_TITLE_DIGITIZE = "打刻エラー"
     ERR_DIGITIZE_REQUIRED = "必須項目が未入力のため打刻できません。"
     ERR_TITLE_DUPLICATE_DIGITIZE = "重複打刻エラー"
     MSG_DUPLICATE_POINT = "同じ点（{ident}）が既に登録されています。\n点名または枝番を変更してください。"
 
-    # --- T-0025: undefined-literal cleanup (plugin.py) ---
     MSG_TITLE_PLUGIN = "点群座標取得"
     MSG_UNSAVED_CHANGES_TITLE = "未保存の変更"
     MSG_UNSAVED_CHANGES = (

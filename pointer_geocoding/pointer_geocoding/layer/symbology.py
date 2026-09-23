@@ -3,29 +3,17 @@
  PointerGeocoding Plugin - Symbology & Labeling Mixin
  ***************************************************************************/
 
-Stage C split (mechanical, logic-preserving): extracted from
-layer_manager.py. Provides SymbologyMixin, mixed into LayerManager,
-containing digitized-point labeling and reference-point symbology/labeling.
+SymbologyMixin, mixed into both LayerManager and MainDockWidget so that
+"symbology application" (digitized-point labeling, reference-point
+symbology, and the Focus Mode opacity override) is a single cohesive
+concern regardless of which widget triggers it. main_dock.py keeps a
+same-named thin delegator to build_opacity_expression()/
+apply_opacity_expression() so Tab2/Tab3 call sites are unaffected.
 
-Stage E: also mixed into MainDockWidget so that "symbology application"
-(digitized-point labeling, reference-point symbology, and the Focus Mode
-opacity override) is a single cohesive concern regardless of which widget
-triggers it. build_opacity_expression()/apply_opacity_expression() were
-moved here from main_dock.py's update_symbology_opacity() without changing
-their expression/output semantics; main_dock.py keeps a same-named thin
-delegator so Tab2/Tab3 call sites are unaffected.
-
-T-0017 (アプローチC): map_tool.py の CanvasDigitizingTool が保持していた
-digitized-point の本格的なカテゴリ分けシンボロジ(S/P/C/SP + ラベリング)、
-main canvas向け基準点クロスシンボル、属性選択時の透過度切替の3メソッドを
-ここへ統合した(apply_point_symbology / apply_ref_point_cross_symbology /
-apply_attribute_transparency)。map_tool.py 側はジオメトリ選択・キャンバス
-インタラクションに専念し、シンボロジの詳細はすべて本ファイル(LayerManager
-経由)に一元化する。なお apply_ref_point_cross_symbology は、CSV由来の
-基準点レイヤに使う apply_ref_point_symbology(ルールベース・大中小グリッド
-表示制御あり)とは別物で、メインキャンバス上の基準点レイヤ向けの単純な
-クロスシンボルである。移設時点でいずれの呼び出し元からも未使用だったが、
-既存の公開APIとして挙動を変えずに移設した。
+apply_point_symbology provides digitized-point categorised symbology
+(S/P/C/SP + labeling), reached via LayerManager. map_tool.py's
+CanvasDigitizingTool is limited to geometry selection and canvas
+interaction; symbology details are consolidated here.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
@@ -89,10 +77,6 @@ class SymbologyMixin:
         settings: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Apply categorical symbology for attribute types S, P, C, and SP.
-
-        T-0017: moved from CanvasDigitizingTool.setup_point_layer_symbology
-        (map_tool.py) without changing behavior, so that all symbology
-        construction lives alongside apply_point_labeling/apply_ref_point_symbology.
 
         - S: Single circle (○).
         - P: Diamond (◇).
@@ -246,70 +230,6 @@ class SymbologyMixin:
         labeling = QgsVectorLayerSimpleLabeling(pal)
         layer.setLabelsEnabled(True)
         layer.setLabeling(labeling)
-
-        layer.triggerRepaint()
-
-    @staticmethod
-    def apply_ref_point_cross_symbology(layer: QgsVectorLayer) -> None:
-        """Apply a simple cross symbol style for a main-canvas reference point layer.
-
-        T-0017: moved from CanvasDigitizingTool.setup_ref_point_layer_symbology
-        (map_tool.py) without changing behavior. Distinct from
-        apply_ref_point_symbology(), which applies rule-based symbology (with
-        大/小グリッド scale-dependent visibility) to the CSV-backed grid
-        reference-point layer (LayerManager.ref_point_layer). At the time of
-        this move, this method had no call sites anywhere in the codebase;
-        it is preserved as-is (unused) rather than removed, since dead-code
-        removal is outside this task's scope.
-
-        :param layer: Target reference point layer.
-        :type layer: QgsVectorLayer
-        """
-        if not layer or not layer.isValid():
-            return
-
-        sym_layer = QgsSimpleMarkerSymbolLayer.create({
-            "name": "cross",
-            "color": "#D32F2F",
-            "outline_color": "#D32F2F",
-            "outline_width": "1.2",
-            "size": "7.0",
-        })
-        symbol = QgsMarkerSymbol()
-        symbol.changeSymbolLayer(0, sym_layer)
-
-        layer.setRenderer(QgsSingleSymbolRenderer(symbol))
-        layer.triggerRepaint()
-
-    @staticmethod
-    def apply_attribute_transparency(layer: QgsVectorLayer, selected_attribute: str) -> None:
-        """Set unselected attribute category symbols to 50% opacity and selected category to 100%.
-
-        T-0017: moved from CanvasDigitizingTool.update_attribute_transparency
-        (map_tool.py) without changing behavior. At the time of this move,
-        this method had no call sites anywhere in the codebase; it is
-        preserved as-is (unused) rather than removed, since dead-code removal
-        is outside this task's scope.
-
-        :param layer: Point layer with QgsCategorizedSymbolRenderer.
-        :type layer: QgsVectorLayer
-        :param selected_attribute: Current confirmed attribute type ('S', 'P', 'C', 'SP').
-        :type selected_attribute: str
-        """
-        if not layer or not layer.isValid():
-            return
-
-        renderer = layer.renderer()
-        if not isinstance(renderer, QgsCategorizedSymbolRenderer):
-            return
-
-        for category in renderer.categories():
-            sym = category.symbol().clone()
-            if category.value() == selected_attribute:
-                sym.setOpacity(1.0)
-            else:
-                sym.setOpacity(0.5)
-            category.setSymbol(sym)
 
         layer.triggerRepaint()
 

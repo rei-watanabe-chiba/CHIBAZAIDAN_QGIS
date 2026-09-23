@@ -3,9 +3,8 @@
  PointerGeocoding Plugin - Settings & Image Metadata Mixin
  ***************************************************************************/
 
-Stage C split (mechanical, logic-preserving): extracted from
-layer_manager.py. Provides SettingsMetadataMixin, mixed into LayerManager,
-containing settings.json and image_metadata.json persistence.
+SettingsMetadataMixin, mixed into LayerManager, containing settings.json
+and image_metadata.json persistence.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 

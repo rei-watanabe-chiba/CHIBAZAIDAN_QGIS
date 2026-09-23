@@ -24,7 +24,7 @@ from qgis.PyQt.QtCore import QVariant
 # 0. Excavation Type / Attribute Type Enums
 # =============================================================================
 #
-# T-0017 (アプローチA): 出土形態・属性記号の文字列比較を型安全なEnumに統一する。
+# 出土形態・属性記号の文字列比較を型安全なEnumに統一する。
 # GeoPackage属性・CSV出力・QGIS式エンジン(CASE WHEN等)は引き続き文字列を要求する
 # ため、`str`を継承したEnum(いわゆる StrEnum 相当)として定義する。これにより
 # `ExcavationType.GRID == "グリッド"` は Trueとなり、既存の文字列ベースの
@@ -274,8 +274,7 @@ def check_point_duplicate(
 ) -> bool:
     """Check whether a point with the same identification attributes already exists.
 
-    T-0032: duplicate detection is now global across drawings (the former
-    drawing_name-based pre-filter has been removed): a point is considered a
+    Duplicate detection is global across drawings: a point is considered a
     duplicate whenever its 出土形態(+遺構名)・点名・枝番 combination matches,
     regardless of which 対象図面 it belongs to. ``drawing_name`` is retained
     as a parameter only for call-signature compatibility with
@@ -292,9 +291,9 @@ def check_point_duplicate(
     :type point_name: str
     :param branch_no: Branch number string.
     :type branch_no: str
-    :param drawing_name: Unused for filtering (T-0032); kept for signature compatibility.
+    :param drawing_name: Unused for filtering; kept for signature compatibility.
     :type drawing_name: str
-    :param exclude_feature_id: T-0023: When set, the feature with this id is skipped
+    :param exclude_feature_id: When set, the feature with this id is skipped
         during the scan (used by existing-point number correction, so a point being
         renumbered is not treated as a duplicate of itself).
     :type exclude_feature_id: Optional[int]
@@ -336,20 +335,16 @@ def build_point_ident(
 ) -> str:
     """Build a human-readable identifier string for a digitized point.
 
-    T-0027: extracted from the previously duplicated inline ident-building
-    code in Tab2DigitizingMixin._on_canvas_clicked (new-point duplicate
-    error) and the former _on_correct_point_number (existing-point
-    duplicate error), so both the new-point digitizing flow and existing-
-    point editing (Tab2DigitizingMixin._on_rename_point_clicked) share a
-    single source of truth for the identifier shown in duplicate errors.
+    Shared by both the new-point digitizing flow and existing-point editing
+    as the single source of truth for the identifier shown in duplicate
+    errors.
 
-    T-0032: the message format changed from a leading "[drawing_name]"
-    prefix to a trailing "図面:..." line on a second line, since duplicate
-    detection (check_point_duplicate) is no longer scoped to a single
-    drawing and callers now display this identifier inline in the 点情報
-    パネル status band (as a tooltip) rather than in a QMessageBox.
-    Overlong drawing names (>15 characters) are truncated with a trailing
-    "..." to keep the message compact within the panel's ~300px width.
+    The identifier's optional drawing-name suffix is shown as a trailing
+    "図面:..." line (not a leading "[drawing_name]" prefix) since callers
+    display this identifier inline in the 点情報パネル status band (as a
+    tooltip) rather than in a QMessageBox. Overlong drawing names (>15
+    characters) are truncated with a trailing "..." to keep the message
+    compact within the panel's ~300px width.
 
     :param excavation_type: ExcavationType.GRID.value or ExcavationType.FEATURE.value.
     :type excavation_type: str
@@ -388,11 +383,10 @@ def check_duplicate_and_build_message(
 ) -> Optional[str]:
     """Check for a duplicate point and, if found, return its formatted identifier.
 
-    T-0027: thin combination of check_point_duplicate() + build_point_ident().
-    T-0032: Tab2DigitizingMixin's own real-time checks
-    (_check_realtime_duplicate) now call check_point_duplicate()/
+    Thin combination of check_point_duplicate() + build_point_ident().
+    Real-time duplicate checks call check_point_duplicate()/
     build_point_ident() directly rather than through this wrapper, but it is
-    kept as a convenience API for any future caller needing the combined
+    kept as a convenience API for any caller needing the combined
     check+message behavior in one call.
 
     :return: Formatted identifier string if a duplicate exists, otherwise None.
@@ -418,16 +412,16 @@ def get_next_point_number(
 ) -> int:
     """Determine the next point number by following the most recently digitized point.
 
-    T-0022 (直前打刻追従型): Among the features matching the active
-    excavation_type/feature_name group, finds the feature with the maximum
-    point_id (auto-incrementing primary key, i.e. the most recently
-    digitized point in that group), extracts the leading numeric "body"
-    portion of its point_name (e.g. '5' from a branch-suffixed '5-a'), and
-    returns that body number + 1. This replaces the previous
-    "max of all purely-numeric point_name values" strategy so that manual
-    edits to older points no longer disturb the auto-numbering sequence.
+    Among the features matching the active excavation_type/feature_name
+    group, finds the feature with the maximum point_id (auto-incrementing
+    primary key, i.e. the most recently digitized point in that group),
+    extracts the leading numeric "body" portion of its point_name (e.g. '5'
+    from a branch-suffixed '5-a'), and returns that body number + 1. This
+    follows the most recently digitized point (rather than the max of all
+    numeric point_name values) so that manual edits to older points do not
+    disturb the auto-numbering sequence.
 
-    T-0023: SP属性(AttributeType.SP)の点は自由入力(手入力)の対象であり、
+    SP属性(AttributeType.SP)の点は自由入力(手入力)の対象であり、
     数値の自動採番シーケンスには含めない。SP属性の点が直前の打刻であっても、
     その point_name の数値プレフィックスを "body_num" として引き継がないよう、
     S/P/C用の探索対象からSP属性のフィーチャを除外する。
@@ -457,7 +451,7 @@ def get_next_point_number(
             if ex_type != ExcavationType.FEATURE.value or f_name != feature_name:
                 continue
 
-        # T-0023: SP属性の点は自動採番(S/P/C)の対象外なので除外する。
+        # SP属性の点は自動採番(S/P/C)の対象外なので除外する。
         if safe_get_str(feat, "attribute_type") == AttributeType.SP.value:
             continue
 

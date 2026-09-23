@@ -19,7 +19,7 @@ from qgis.gui import (
     QgisInterface,
     QgsMapCanvas,
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QPoint
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -49,7 +49,7 @@ from .core.state import (
     UIStateStore, ResetSelectionAction, SetFeatureCacheAction,
     SelectDrawingAction, SetDisplayFiltersAction, ChangeTab2ModeAction,
     ChangeAutonumModeAction, SetFocusModeAction, UpdateDigitizingInputsAction,
-    ValidateDigitizingInputsAction, SetPointInfoErrorAction, CanvasClickAction,
+    SetPointInfoErrorAction, CanvasClickAction,
     AddManualDigitizedPointAction, DeletePointAction, UpdatePointAttributesAction,
     UpdateFeatureCategoryAction, ChangeRefPointVisibilityAction, ChangeDrawingVisibilityAction
 )
@@ -90,9 +90,6 @@ TAB2_POINT_INFO_SPEC = PanelSpec(
         FieldSpec(field_id="point_name_sp", widget_type=WidgetType.LINEEDIT_ROW, label=UILabels.POINT_NAME, placeholder=UIPlaceholders.POINT_NAME_SP, on_change="point_identity_changed", visible=False),
         FieldSpec(field_id="branch_no", widget_type=WidgetType.LINEEDIT_ROW, label=UILabels.BRANCH_NO, placeholder=UIPlaceholders.BRANCH_NO, on_change="branch_text_changed"),
         FieldSpec(field_id="autonum_mode", widget_type=WidgetType.SEGMENTED_TOGGLE, options=[UILabels.AUTONUM_MODE_AUTO, UILabels.AUTONUM_MODE_RELEASE], default_index=0, on_change="autonum_mode_changed"),
-        FieldSpec(field_id="edit_mode_actions", widget_type=WidgetType.BUTTON_ROW, centered=False, visible=False, buttons=[
-            ButtonDef(field_id="delete_point", text=UILabels.BTN_DELETE_POINT, on_click="delete_point_clicked"),
-        ]),
     ],
 )
 
@@ -165,7 +162,7 @@ class MainDockWidget(QDockWidget):
         self.map_tool.canvas_clicked.connect(self._on_canvas_clicked)
         self.map_tool.existing_point_selected.connect(self._on_existing_point_selected)
         self.map_tool.blank_click_in_edit_mode.connect(
-            lambda: self.dispatcher.dispatch(ResetSelectionAction())
+            lambda: self.map_tool.clear_selected_marker()
         )
 
         self._init_ui()
@@ -345,17 +342,23 @@ class MainDockWidget(QDockWidget):
         self.panel_point_info = CoreUIBuilder.build(TAB2_POINT_INFO_SPEC, parent=container)
         self.lbl_point_info_status = QLabel(self.panel_point_info.get("point_info_summary"))
         self.lbl_point_info_status.setWordWrap(True)
-        self.panel_point_info.get("point_info_summary").layout().addWidget(self.lbl_point_info_status)
-        UIStyleHelper.update_status_panel(self.panel_point_info.get("point_info_summary"), self.lbl_point_info_status, UILabels.STATUS_NEW_POINT, "info")
-        
+        info_panel_frame = self.panel_point_info.get("point_info_summary")
+        info_panel_frame.layout().addWidget(self.lbl_point_info_status)
+        UIStyleHelper.update_status_panel(info_panel_frame, self.lbl_point_info_status, UILabels.STATUS_NEW_POINT, "info")
+
+        # 自動連番/解除トグルを点情報パネルのステータスボックス内に移動する
+        autonum_row = self.panel_point_info.get_row("autonum_mode")
+        self.panel_point_info.widget.layout().removeWidget(autonum_row)
+        info_panel_frame.layout().addSpacing(UIConfig.PANEL_MARGIN)
+        info_panel_frame.layout().addWidget(autonum_row)
+
         self.panel_point_info.auto_bind(self.dispatcher, {
             "autonum_mode_changed": lambda idx: ChangeAutonumModeAction("auto" if idx == 0 else "release"),
-            "delete_point_clicked": lambda: DeletePointAction(self.state_store.state.selected_point_id) if self.state_store.state.selected_point_id else None
         })
         self.panel_point_info.bind("point_identity_changed", self._update_digitizing_inputs_to_state)
         self.panel_point_info.bind("branch_text_changed", self._update_digitizing_inputs_to_state)
         layout.addWidget(self.panel_point_info.widget)
-        layout.addWidget(UIStyleHelper.build_separator(container))
+        layout.addSpacing(UIConfig.PANEL_MARGIN)
 
         # 3. 属性パネル
         self.panel_attribute = CoreUIBuilder.build(TAB2_ATTRIBUTE_SPEC, parent=container)
@@ -422,11 +425,12 @@ class MainDockWidget(QDockWidget):
         if "tab2_mode" in diff:
             is_new = (new_state.tab2_mode == "new")
             self.panel_point_info.get_row("autonum_mode").setVisible(is_new)
-            self.panel_point_info.get_row("edit_mode_actions").setVisible(not is_new)
             self.panel_point_info.get_row("point_name").setEnabled(is_new)
             self.panel_point_info.get_row("point_name_sp").setEnabled(is_new)
             self.panel_point_info.get_row("branch_no").setEnabled(is_new)
             self.panel_attribute.widget.setEnabled(is_new)
+            if getattr(self, "map_tool", None) and hasattr(self.map_tool, "update_tab2_mode"):
+                self.map_tool.update_tab2_mode(new_state.tab2_mode)
 
         if "selected_point_id" in diff and new_state.selected_point_id is None:
             if getattr(self, "map_tool", None):
@@ -453,7 +457,7 @@ class MainDockWidget(QDockWidget):
             self.update_symbology_opacity()
             self._update_map_tool_focus_state()
 
-        if any(k in diff for k in ("point_info_summary", "point_info_has_error", "is_out_of_bounds", "status_message", "selected_point_id")):
+        if any(k in diff for k in ("point_info_summary", "point_info_has_error", "is_out_of_bounds", "status_message", "selected_point_id", "tab2_mode")):
             self._update_point_info_status_ui(new_state)
 
         if "feature_name_list" in diff:
@@ -500,9 +504,6 @@ class MainDockWidget(QDockWidget):
 
     def _update_digitizing_inputs_to_state(self, *args) -> None:
         """Viewのパネル入力状態をStateの inputs に一括反映してバリデーションを発行する"""
-        if self.state_store.state.suppress_realtime_commit:
-            return
-            
         combo_attr = self.panel_attribute.get("attribute_code")
         inputs = {
             "attribute_code": combo_attr.currentData() or combo_attr.currentText(),
@@ -513,7 +514,7 @@ class MainDockWidget(QDockWidget):
             "branch_no": self.panel_point_info.get_value("branch_no")
         }
         self.dispatcher.dispatch(UpdateDigitizingInputsAction(inputs))
-        self.dispatcher.dispatch(ValidateDigitizingInputsAction())
+        self.digitizing_logic.run_validation()
 
     def _on_attribute_category_changed(self, *args):
         combo_attr = self.panel_attribute.get("attribute_code")
@@ -525,34 +526,32 @@ class MainDockWidget(QDockWidget):
         if is_sp:
             if not buttons[1].isChecked():
                 buttons[1].setChecked(True)
-            buttons.setEnabled(False)
+            buttons[0].setEnabled(False)
             buttons[1].setEnabled(False)
         else:
-            buttons.setEnabled(True)
+            buttons[0].setEnabled(True)
             buttons[1].setEnabled(True)
-            
-        if self.state_store.state.selected_point_id is None:
-            autonum_action = self.digitizing_logic.apply_next_point_number()
-            if autonum_action:
-                self.dispatcher.dispatch(autonum_action)
+
+        autonum_action = self.digitizing_logic.apply_next_point_number()
+        if autonum_action:
+            self.dispatcher.dispatch(autonum_action)
         self._update_digitizing_inputs_to_state()
 
     def _on_excavation_changed(self, *args):
         is_feat = self.panel_attribute.get_value("excavation_type") == ExcavationType.FEATURE.value
         self.panel_attribute.get_row("feature_name").setVisible(is_feat)
         self.panel_attribute.get_row("feature_actions").setVisible(is_feat)
-        if self.state_store.state.selected_point_id is None:
-            autonum_action = self.digitizing_logic.apply_next_point_number()
-            if autonum_action:
-                self.dispatcher.dispatch(autonum_action)
+        autonum_action = self.digitizing_logic.apply_next_point_number()
+        if autonum_action:
+            self.dispatcher.dispatch(autonum_action)
         self._update_digitizing_inputs_to_state()
 
     def _update_point_info_status_ui(self, state):
         summary = state.point_info_summary
         status_text = state.status_message
-        status_type = "error" if state.point_info_has_error else "warning" if state.selected_point_id is not None else "info"
+        status_type = "error" if state.point_info_has_error else "warning" if state.tab2_mode == "edit" else "info"
         if not status_text:
-            status_text = UILabels.STATUS_EDIT_POINT if state.selected_point_id is not None else UILabels.STATUS_NEW_POINT
+            status_text = UILabels.STATUS_EDIT_POINT if state.tab2_mode == "edit" else UILabels.STATUS_NEW_POINT
                 
         full_text = f"{status_text}\n" \
                     f"{UILabels.LBL_INFO_GROUP_OR_FEATURE} {summary.get('group', '-')}\n" \
@@ -600,9 +599,12 @@ class MainDockWidget(QDockWidget):
         is_sp = (inputs.get("attribute_code") == AttributeType.SP.value)
         last_name = self.digitizing_logic.get_last_created_point_name(ex_type, feat_name, is_sp)
 
+        device_pt = self.canvas.getCoordinateTransform().transform(map_point)
+        global_pos = self.canvas.mapToGlobal(QPoint(round(device_pt.x()), round(device_pt.y())))
+
         dlg = PointNameEntryDialog(
             self.point_layer, ex_type, feat_name, drawing_name, is_sp,
-            self, initial_point_name=last_name
+            self, initial_point_name=last_name, popup_pos=global_pos
         )
         if dlg.exec_() == QDialog.Accepted:
             pname, bno = dlg.get_values()
@@ -671,7 +673,7 @@ class MainDockWidget(QDockWidget):
                     temp_list.append(new_name)
                     self.state_store.dispatch(SetFeatureCacheAction(feature_list=temp_list))
                 self.dispatcher.dispatch(UpdateDigitizingInputsAction({"feature_name": new_name}))
-                self.dispatcher.dispatch(ValidateDigitizingInputsAction())
+                self.digitizing_logic.run_validation()
 
     def _show_display_filter_dialog(self) -> None:
         dlg = DisplayFilterDialog(
@@ -768,7 +770,7 @@ class MainDockWidget(QDockWidget):
         d_name = self._get_target_drawing_name()
         drawing = d_name if d_name != UILabels.DRAWING_UNSPECIFIED else ""
         self.dispatcher.dispatch(SelectDrawingAction(drawing))
-        self.dispatcher.dispatch(ValidateDigitizingInputsAction())
+        self.digitizing_logic.run_validation()
 
     def _on_drawing_table_header_clicked(self, logical_index: int) -> None:
         if logical_index != 0:
@@ -848,10 +850,12 @@ class MainDockWidget(QDockWidget):
                     filters["target_drawing_name"] = None
 
             expr = self.layer_manager.build_opacity_expression(is_focus_on, filters, 0)
+            # apply_opacity_expression() already calls layer.triggerRepaint() (the
+            # layer's own native redraw signal) internally, so no extra manual
+            # self.canvas.refresh() is issued here — avoids a duplicate repaint
+            # per data/opacity update (Core_Architecture_UIUX.md section 2).
             self.layer_manager.apply_opacity_expression(self.point_layer, expr)
-            if hasattr(self, "canvas") and self.canvas:
-                self.canvas.refresh()
-    
+
     def _update_map_tool_focus_state(self) -> None:
         if self.map_tool is not None:
             state = self.state_store.state

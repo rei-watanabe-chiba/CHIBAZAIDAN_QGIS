@@ -20,10 +20,10 @@ from ..logic.core import (
 )
 from ..ui.constants import UILabels, UIMessages
 from ..ui.core.state import (
-    UIStateStore, UIAction, SelectPointAction, SetValidationAction, SetPointInfoErrorAction,
+    UIStateStore, UIAction, SetValidationAction, SetPointInfoErrorAction,
     SetDigitizedWithBranchAction, ResetSelectionAction, SetProcessingAction,
     UpdateDigitizingInputsAction, SetPointInfoSummaryAction, SetFeatureCacheAction,
-    SetSuppressCommitAction, CanvasClickAction, AddManualDigitizedPointAction,
+    CanvasClickAction, AddManualDigitizedPointAction,
     DeletePointAction, UpdatePointAttributesAction, UpdateFeatureCategoryAction,
     ValidateDigitizingInputsAction
 )
@@ -71,9 +71,10 @@ class DigitizingLogic(QObject):
         self.dispatcher.register_handler(DeletePointAction, self.handle_delete_point)
         self.dispatcher.register_handler(UpdatePointAttributesAction, self.handle_update_attributes)
         self.dispatcher.register_handler(UpdateFeatureCategoryAction, self.handle_update_feature_category)
-        
-        # リアルタイムバリデーション（軽量同期用）
-        self.dispatcher.register_handler(ValidateDigitizingInputsAction, self.handle_validate_inputs)
+
+        # リアルタイムバリデーション（軽量同期用）は、EventDispatcherの重いパイプライン
+        # （SetProcessingActionによるドック全体の一時無効化）を経由すると入力中ウィジェットの
+        # フォーカスが失われるため、ハンドラ登録はせずrun_validation()経由で直接呼び出す。
 
     def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
         """
@@ -102,17 +103,16 @@ class DigitizingLogic(QObject):
         feat = inputs.get("feature_name")
         return not feat or feat in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成"))
 
-    def calculate_next_point_number(self, excavation_type: str, feature_name: str, is_sp: bool) -> str:
+    def calculate_next_point_number(self, excavation_type: str, feature_name: str, is_sp: bool) -> int:
         """
         現在のカテゴリに基づいて自動採番された次の点名を返す。
-        （SP属性は自動採番対象から除外される [RULE-DOMAIN-06]）
+        （SP属性は自動採番対象から除外される [RULE-DOMAIN-06]。呼び出し元
+        apply_next_point_number() が is_sp=True の場合は本メソッドを呼び出さない
+        ようガードしているため、is_sp引数はここでは分岐に使用しない）
         """
-        if is_sp:
-            return ""
         if feature_name in (UILabels.UNREGISTERED, getattr(UILabels, "FEATURE_NEW_OPTION", "新規作成")):
             feature_name = ""
-        next_num = get_next_point_number(self.point_layer, excavation_type, feature_name)
-        return str(next_num)
+        return get_next_point_number(self.point_layer, excavation_type, feature_name)
 
     def get_last_created_point_name(self, excavation_type: str, feature_name: str, is_sp: bool) -> str:
         """指定カテゴリで最後に作成された点名を取得する（手動入力補完用）"""
@@ -202,9 +202,6 @@ class DigitizingLogic(QObject):
     def handle_validate_inputs(self, action: ValidateDigitizingInputsAction) -> Optional[List[UIAction]]:
         """UIの入力状態のリアルタイムバリデーションと同期を処理する"""
         state = self.state_store.state
-        if state.suppress_realtime_commit:
-            return []
-            
         inputs = state.digitizing_inputs
         pname = str(inputs.get("point_name", ""))
         branch = str(inputs.get("branch_no", ""))
@@ -215,14 +212,8 @@ class DigitizingLogic(QObject):
         is_missing_feat = self.is_feature_name_missing(inputs)
         dup_ident = self.check_realtime_duplicate(ex_type, feat_name, pname, branch, state.selected_point_id, drawing_name)
         
-        out_of_bounds = False
-        if state.selected_point_id is not None:
-            if feat := self.point_layer.getFeature(state.selected_point_id):
-                if feat.isValid() and feat.hasGeometry():
-                    out_of_bounds = not self.validate_drawing_bounds(drawing_name, feat.geometry().asPoint())[0]
-        else:
-            out_of_bounds = state.is_out_of_bounds
-            
+        out_of_bounds = state.is_out_of_bounds
+
         has_err = is_missing_feat or bool(dup_ident) or out_of_bounds
         
         status_msg = ""
@@ -245,6 +236,23 @@ class DigitizingLogic(QObject):
             SetPointInfoErrorAction(has_err, out_of_bounds),
             SetPointInfoSummaryAction(summary)
         ]
+
+    def run_validation(self) -> None:
+        """
+        リアルタイムバリデーションをEventDispatcherを経由せずに直接実行する。
+
+        ValidateDigitizingInputsActionをEventDispatcherへdispatchすると
+        SetProcessingAction(True)→ハンドラ→SetProcessingAction(False)という
+        重いパイプラインを経由し、is_processing=Trueの瞬間にドック全体が
+        setEnabled(False)されてフォーカス中のウィジェット（点名/枝番の入力欄等）の
+        フォーカスが失われてしまう。1文字入力のたびに発生するこの処理は軽量かつ
+        確定前のUIイベントであるため、Core_Architecture_UIUX.mdの
+        【未登録操作のローカル受容】方針に従いパイプラインを素通りしてStateStoreへ
+        直接反映する。
+        """
+        actions = self.handle_validate_inputs(ValidateDigitizingInputsAction())
+        if actions:
+            self.state_store.dispatch_batch(actions)
 
     def handle_canvas_click(self, action: CanvasClickAction) -> Optional[List[UIAction]]:
         """キャンバスがクリックされた時の自動打刻処理"""
@@ -324,11 +332,17 @@ class DigitizingLogic(QObject):
         
         with self.busy_interaction_guard():
             insert_feature_to_layer(self.point_layer, new_feat)
+            # update_symbology_opacity_cb() recalculates the data-driven opacity
+            # expression for the new feature and triggers the layer's own native
+            # repaint (QgsVectorLayer.triggerRepaint()) internally; it no longer
+            # issues a separate manual canvas.refresh(). refresh_canvas_cb() below
+            # remains as the single explicit redraw for this new-point path
+            # (Core_Architecture_UIUX.md section 2: no duplicate manual repaints).
             if self.update_symbology_opacity_cb:
                 self.update_symbology_opacity_cb()
             if self.refresh_canvas_cb:
                 self.refresh_canvas_cb()
-                
+
         has_branch = bool(feat_dict["branch_no"])
         actions: List[UIAction] = [
             SetDigitizedWithBranchAction(has_branch=has_branch)
@@ -365,8 +379,23 @@ class DigitizingLogic(QObject):
         """既存点の属性を更新する [RULE-PERSIST-05]"""
         fid = action.feature_id
         updates = action.updates
-        
+
         if self.point_layer and self.point_layer.isValid():
+            new_drawing_name = updates.get("drawing_name")
+            if new_drawing_name and new_drawing_name != UILabels.DRAWING_UNSPECIFIED:
+                current_feat = self.point_layer.getFeature(fid)
+                current_drawing_name = safe_get_str(current_feat, "drawing_name")
+                if new_drawing_name != current_drawing_name and current_feat.hasGeometry():
+                    is_valid, _ = self.validate_drawing_bounds(new_drawing_name, current_feat.geometry().asPoint())
+                    if not is_valid:
+                        self.iface.messageBar().pushMessage(
+                            UIMessages.MSG_UPDATE_OUT_OF_BOUNDS_TITLE,
+                            UIMessages.MSG_UPDATE_OUT_OF_BOUNDS,
+                            level=Qgis.MessageLevel.Warning,
+                            duration=5,
+                        )
+                        return [ResetSelectionAction(), ValidateDigitizingInputsAction()]
+
             with self.busy_interaction_guard():
                 field_names = self.point_layer.fields().names()
                 self.point_layer.startEditing()
@@ -375,10 +404,15 @@ class DigitizingLogic(QObject):
                         idx = field_names.index(field_name)
                         self.point_layer.changeAttributeValue(fid, idx, value)
                 self.point_layer.commitChanges()
-                
+
+                # update_symbology_opacity_cb() only recalculates the data-driven
+                # opacity expression and lets the layer's own native repaint signal
+                # (triggerRepaint(), invoked internally) drive the redraw; no manual
+                # canvas.refresh() is issued here, mirroring handle_delete_point()'s
+                # reliance on QGIS's native signals (Core_Architecture_UIUX.md section 2).
                 if self.update_symbology_opacity_cb:
                     self.update_symbology_opacity_cb()
-                    
+
         return [ResetSelectionAction(), ValidateDigitizingInputsAction()]
 
     def handle_update_feature_category(self, action: UpdateFeatureCategoryAction) -> Optional[List[UIAction]]:

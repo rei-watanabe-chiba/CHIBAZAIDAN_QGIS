@@ -3,10 +3,9 @@
  PointerGeocoding Plugin - Layer Manager Data Models
  ***************************************************************************/
 
-Stage C split (mechanical, logic-preserving): extracted from
-layer_manager.py. Contains the plain dataclasses and small standalone
-helper functions used throughout LayerManager and its mixins, with no
-dependency on LayerManager itself or on any of its mixin modules.
+Plain dataclasses and small standalone helper functions used throughout
+LayerManager and its mixins, with no dependency on LayerManager itself or
+on any of its mixin modules.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 

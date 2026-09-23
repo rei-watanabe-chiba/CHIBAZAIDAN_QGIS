@@ -3,11 +3,9 @@
  PointerGeocoding Plugin - GeoPackage & Spatial Index Cache Mixin
  ***************************************************************************/
 
-Stage C split (mechanical, logic-preserving): extracted from
-layer_manager.py. Provides GpkgCacheMixin, mixed into LayerManager,
-containing GeoPackage creation/migration and the QgsSpatialIndex /
-attribute-cache Observer pattern that keeps them in sync with the points
-layer.
+GpkgCacheMixin, mixed into LayerManager, containing GeoPackage
+creation/migration and the QgsSpatialIndex / attribute-cache Observer
+pattern that keeps them in sync with the points layer.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
