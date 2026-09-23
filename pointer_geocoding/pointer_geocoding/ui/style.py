@@ -54,7 +54,7 @@ class UIStyleHelper:
         # blocks, so a plain f-string/str.format() would require escaping
         # every one of them. Instead we keep this a plain triple-quoted
         # string with unique %%-style placeholders substituted via
-        # str.replace() below (see T-0044 4th follow-up).
+        # str.replace() below.
         return """
         /* General Widget Typography & Spacing */
         QWidget {
@@ -83,9 +83,9 @@ class UIStyleHelper:
             border: 1.5px solid palette(highlight);
         }
 
-        /* T-0044: QSpinBox base styling. NOTE: only the outer box and the
-           up/down button sub-control geometry are styled here; arrow glyphs
-           are handled separately below (see T-0044 2nd follow-up). */
+        /* QSpinBox base styling. NOTE: only the outer box and the
+           up/down button sub-control geometry are styled here; arrow
+           glyphs are handled separately below. */
         QSpinBox {
             background-color: palette(base);
             color: palette(text);
@@ -103,12 +103,12 @@ class UIStyleHelper:
             border: 1.5px solid palette(highlight);
         }
 
-        /* T-0044 follow-up: up-button/down-button now each declare their own
-           subcontrol-position (previously omitted, which left the buttons
-           visually detached from the box with no working hover/click hit
-           area). border-left forms a subtle divider from the text area, and
-           only the outer corners get border-radius so the buttons still read
-           as part of the same rounded box. */
+        /* up-button/down-button each declare their own subcontrol-position;
+           without it, the buttons render visually detached from the box
+           with no working hover/click hit area. border-left forms a subtle
+           divider from the text area, and only the outer corners get
+           border-radius so the buttons still read as part of the same
+           rounded box. */
         QSpinBox::up-button {
             subcontrol-origin: border;
             subcontrol-position: top right;
@@ -125,27 +125,19 @@ class UIStyleHelper:
             border-bottom-right-radius: 4px;
         }
 
-        /* T-0044 3rd follow-up: the border-trick used previously (transparent
-           left/right borders + a single colored border to fake a triangle)
-           rendered as a solid black square rather than a triangle on the
-           QSpinBox arrow sub-controls (known-unstable behavior of the CSS
-           border-triangle hack against Qt's QSS arrow sub-controls; see Qt
-           Forum reports). The officially recommended workaround is to supply
-           an actual icon via the `image` property instead of drawing the
-           shape with borders.
-           T-0044 4th follow-up: the 3rd follow-up's base64 data-URI
-           (image: url(data:image/svg+xml;base64,...)) turned out to be a
-           known Qt QSS limitation (QTBUG-51081: QSS url() does not reliably
-           load embedded data URIs), so the arrow disappeared entirely
-           instead of rendering as a triangle. This has been replaced with
-           references to real SVG files under src/icon/ (spin_up_arrow.svg /
-           spin_down_arrow.svg), resolved to an absolute, forward-slash path
-           at runtime below (__UP_ARROW_PATH__ / __DOWN_ARROW_PATH__
-           placeholders substituted via str.replace() after this template).
-           Both files are fixed 8x6 triangles filled with a neutral gray
-           (#6B6B6B); this is a fixed, theme-non-adaptive color (does not
-           follow palette(text) / dark-light mode), which is an accepted
-           trade-off for this fix. */
+        /* Arrow glyphs are supplied via real SVG image files under
+           src/icon/ (spin_up_arrow.svg / spin_down_arrow.svg), not CSS
+           border-triangle tricks or embedded base64 data-URIs: both are
+           unreliable against Qt's QSS engine (the border-triangle hack
+           renders as a solid block rather than a triangle on QSpinBox
+           arrow sub-controls; QSS url() does not reliably load embedded
+           data URIs -- see QTBUG-51081). Resolved to an absolute,
+           forward-slash path at runtime below (__UP_ARROW_PATH__ /
+           __DOWN_ARROW_PATH__ placeholders substituted via str.replace()
+           after this template). Both files are fixed 8x6 triangles filled
+           with a neutral gray (#6B6B6B); this is a fixed, theme-non-adaptive
+           color (does not follow palette(text) / dark-light mode), which is
+           an accepted trade-off. */
         QSpinBox::up-arrow {
             image: url(__UP_ARROW_PATH__);
             width: 8px;
@@ -158,15 +150,13 @@ class UIStyleHelper:
             height: 6px;
         }
 
-        /* T-0044 7th follow-up: press-state feedback moved from the button
-           background-color to the arrow glyph color itself (see the 5th/6th
-           follow-up rules removed above, which caused focus-border overlap
-           and background bleed). Swapping to a darker-filled SVG on
-           ::up-arrow:pressed / ::down-arrow:pressed avoids the box-model
-           overlap issues entirely since only the small arrow image changes,
-           not any background/border geometry. width/height are redeclared
-           explicitly since Qt has not reliably carried over sub-control
-           properties across state changes in this stylesheet before. */
+        /* Press-state feedback uses a darker-filled SVG swap on
+           ::up-arrow:pressed / ::down-arrow:pressed rather than a
+           background-color change, avoiding box-model overlap with the
+           focus border since only the small arrow image changes. width/
+           height are redeclared explicitly since Qt does not reliably
+           carry over sub-control properties across state changes in this
+           stylesheet. */
         QSpinBox::up-arrow:pressed {
             image: url(__UP_ARROW_PRESSED_PATH__);
             width: 8px;
@@ -293,7 +283,7 @@ class UIStyleHelper:
             background: transparent;
         }
 
-        /* T-0020: Left icon rail navigation buttons (図面管理・設定 side panel
+        /* Left icon rail navigation buttons (図面管理・設定 side panel
            toggles). Checked state indicates the corresponding side panel is
            currently open. */
         QToolButton[navButton="true"] {
@@ -498,7 +488,7 @@ class UIStyleHelper:
 
     @staticmethod
     def set_error_border(widget: QWidget, has_error: bool) -> None:
-        """Apply/remove a red error-highlight border on an input widget (T-0033).
+        """Apply/remove a red error-highlight border on an input widget.
 
         Used by Tab2's 点情報パネル real-time validation to flag combo_feature_name
         (遺構名未指定) and the active point-name input (点名重複) without relying
@@ -552,7 +542,7 @@ class UIStyleHelper:
     def set_nav_button(button: QWidget) -> None:
         """Mark a checkable QToolButton as a left icon-rail navigation button.
 
-        Used by the T-0020 collapsible side panel (図面管理・設定), whose
+        Used by the collapsible side panel (図面管理・設定), whose
         open/closed state is reflected by the button's checked state.
         """
         button.setProperty("navButton", True)
@@ -650,12 +640,11 @@ class UIStyleHelper:
         :type widget: QWidget
         :param spacing: Horizontal spacing between label and widget. Default is 4.
         :type spacing: int
-        :param label_width: T-0048 (人手確認フィードバック対応): optional
-            fixed pixel width for the generated QLabel, so labels of
-            differing character count (e.g. tab3_settings.py's
-            サイズ/線幅/線色/間隔) line up their input widgets at the same
-            x-offset across rows. None (the default) keeps the label at its
-            natural width, unchanged from prior behavior.
+        :param label_width: Optional fixed pixel width for the generated
+            QLabel, so labels of differing character count (e.g. the
+            settings panel's サイズ/線幅/線色/間隔) line up their input
+            widgets at the same x-offset across rows. None (the default)
+            keeps the label at its natural width.
         :type label_width: Optional[int]
         :return: Composite QWidget containing the label + widget row.
         :rtype: QWidget

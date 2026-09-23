@@ -3,10 +3,9 @@
  PointerGeocoding Plugin - CoreUI field_spec (declaration-only data types)
  ***************************************************************************/
 
-T-0045: pure dataclasses describing "what a panel looks like" (widget kind /
+Pure dataclasses describing "what a panel looks like" (widget kind /
 label / choices / visibility / event-hook name). No PyQt widget is ever
-constructed in this module -- that is CoreUIBuilder's job (builder.py). This
-mirrors the "宣言のみ" design described in .claude/state/v2-coreui-plan.md.
+constructed in this module -- that is CoreUIBuilder's job (builder.py).
 """
 from dataclasses import dataclass, field
 from enum import Enum
@@ -16,11 +15,9 @@ from typing import List, Optional, Tuple
 class WidgetType(Enum):
     """Kinds of rows/fields CoreUIBuilder knows how to construct.
 
-    Only the kinds actually needed by a real screen's schema are implemented
-    here (originally tab1_image.py's TAB1_* specs; RADIO_ROW was added for
-    start_dialog.py's T-0046 adoption); new kinds should be added only once
-    a real screen needs them (avoids speculative/unused surface area, per
-    the CoreUI plan's "逃げ道" principle for screen-specific exceptions).
+    Only the kinds actually needed by a real screen's schema are
+    implemented here; new kinds should be added only once a real screen
+    needs them, avoiding speculative/unused surface area.
     """
     LINEEDIT_ROW = "lineedit_row"
     COMBOBOX_ROW = "combobox_row"
@@ -62,9 +59,9 @@ class ButtonDef:
 
 @dataclass
 class InfoLine:
-    """One line within an INFO_PANEL field (T-0045: models Tab1's status
-    panel, which stacks a bold header / separator / plain status line / a
-    word-wrapped multi-line residual summary).
+    """One line within an INFO_PANEL field (models a status panel, which
+    stacks a bold header / separator / plain status line / a word-wrapped
+    multi-line residual summary).
     """
     kind: str
     field_id: Optional[str] = None

@@ -3,10 +3,9 @@
  PointerGeocoding Plugin - Session I/O Mixin
  ***************************************************************************/
 
-Stage C split (mechanical, logic-preserving): extracted from
-layer_manager.py. Provides SessionIOMixin, mixed into LayerManager,
-containing new/existing session setup, image copying, world file
-generation, raster/reference-point loading, and project save.
+SessionIOMixin, mixed into LayerManager, containing new/existing session
+setup, image copying, world file generation, raster/reference-point
+loading, and project save.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
@@ -93,9 +92,8 @@ class SessionIOMixin:
                 #     No GPKG-based ref_points layer is created or loaded here.
 
             # 4.3 Ensure the '画像ファイル' raster group exists in the layer tree from
-            # session creation, even before any image has been added (T-0015). It was
-            # previously only created lazily, the first time load_georeferenced_raster()
-            # ran, which meant an unused new session showed no such group at all.
+            # session creation, even before any image has been added, so an
+            # unused new session does not show a missing group.
             if project.layerTreeRoot().findGroup("画像ファイル") is None:
                 project.layerTreeRoot().addGroup("画像ファイル")
 
@@ -376,8 +374,8 @@ class SessionIOMixin:
             project.setCrs(local_crs)
 
             # Ensure the '画像ファイル' raster group exists in the layer tree, even for
-            # sessions that were saved before any image was ever added (T-0015). Persist
-            # it back to the project file so it is not re-created on every reload.
+            # sessions saved before any image was ever added. Persist it back
+            # to the project file so it is not re-created on every reload.
             if project.layerTreeRoot().findGroup("画像ファイル") is None:
                 project.layerTreeRoot().addGroup("画像ファイル")
                 project.write(qgz_path)

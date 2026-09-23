@@ -92,7 +92,7 @@ class PointerGeocodingPlugin:
         self._teardown_dock_widget()
 
     def _teardown_dock_widget(self) -> None:
-        """Unregister and dispose of the main dock widget (T-0024)."""
+        """Unregister and dispose of the main dock widget."""
         if self.dock_widget is None:
             return
 

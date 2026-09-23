@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any, List, Callable, Tuple
 
 from qgis.core import QgsRasterLayer
 from qgis.gui import QgsMapCanvas
-from qgis.PyQt.QtCore import Qt, pyqtSlot, QRegExp
+from qgis.PyQt.QtCore import Qt, pyqtSlot, QRegExp, QPoint
 from qgis.PyQt.QtGui import QRegExpValidator, QColor
 from qgis.PyQt.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
@@ -634,7 +634,7 @@ FeatureCreateDialog = FeatureManageDialog
 
 
 class PointNameEntryDialog(QDialog):
-    def __init__(self, point_layer, excavation_type, feature_name, drawing_name="", is_sp_attribute=False, parent=None, initial_point_name=""):
+    def __init__(self, point_layer, excavation_type, feature_name, drawing_name="", is_sp_attribute=False, parent=None, initial_point_name="", popup_pos: Optional[QPoint] = None):
         super().__init__(parent)
         self.is_sp_attribute = is_sp_attribute
         self.result_point_name = ""
@@ -677,6 +677,9 @@ class PointNameEntryDialog(QDialog):
         layout.addWidget(actions_panel.widget)
 
         self._on_realtime_validate()
+
+        if popup_pos is not None:
+            self.move(popup_pos)
 
     def _get_point_name_text(self):
         return self.edit_point_name_sp.text().strip() if self.is_sp_attribute else str(self.spin_point_name.value())

@@ -3,24 +3,18 @@
  PointerGeocoding Plugin - CoreUI validators (generic input-validation types)
  ***************************************************************************/
 
-T-0045-b (③): generic, presentation-agnostic Validator classes for the
-"required field" / "forbidden character pattern" / "duplicate against
-existing data" checks that recur across tab1/tab2/start_dialog input
-handlers. Each Validator only performs the boolean judgment (via
-``validate()`` -> ``ValidationResult``); it deliberately does NOT own how a
-failure is displayed (QMessageBox, status panel, field focus, etc. all stay
-the caller's responsibility, per the existing per-screen conventions).
+Generic, presentation-agnostic Validator classes for the "required field"
+/ "forbidden character pattern" / "duplicate against existing data" checks
+that recur across input handlers. Each Validator only performs the
+boolean judgment (via ``validate()`` -> ``ValidationResult``); it
+deliberately does NOT own how a failure is displayed (QMessageBox, status
+panel, field focus, etc. all stay the caller's responsibility).
 
 DuplicateValidator is intentionally generic: it takes a caller-supplied
 ``exists_check`` callable rather than depending on any business-logic
 function (e.g. ``logic.core.check_point_duplicate``), so it can be reused
 against any "does this value already exist" question (layer names, point
 identities, etc.) without coupling this module to a specific domain.
-
-Only tab1_image.py's ``_on_confirm_image_clicked`` is wired to these
-classes for now (T-0045-b scope); tab2_plot.py/start_dialog.py adoption is
-deferred to T-0046/T-0047, following the same "don't fix the shape from a
-single screen's example" policy already used for ``rules.py``.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -138,8 +132,8 @@ def show_validation_error(
 ) -> None:
     """Display ``result``'s failure message via ``QMessageBox.warning``.
 
-    T-0045-b extension: pairs with the Validator classes above to collapse
-    each caller's "judge -> QMessageBox.warning(...) -> setFocus()" block
+    Pairs with the Validator classes above to collapse each caller's
+    "judge -> QMessageBox.warning(...) -> setFocus()" block
     into a couple of lines. Does nothing when ``result.is_valid`` is True,
     so callers can call this unconditionally and still need their own
     ``if not result.is_valid: return`` for early-exit control flow.

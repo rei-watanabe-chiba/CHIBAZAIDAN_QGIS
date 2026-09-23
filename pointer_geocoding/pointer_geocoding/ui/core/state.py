@@ -12,12 +12,10 @@ class UIState:
     
     # 2. 選択・編集状態
     selected_point_id: Optional[int] = None
-    selected_point_data: Optional[Dict[str, Any]] = None
     has_digitized_with_branch: bool = False
     selected_drawing_name: str = ""
-    
+
     # 3. 制御フラグ
-    suppress_realtime_commit: bool = False
     has_input_error: bool = False
     point_info_has_error: bool = False
     is_out_of_bounds: bool = False
@@ -63,11 +61,6 @@ class ChangeTab1ModeAction(UIAction):
 @dataclass
 class ChangeTab2ModeAction(UIAction):
     mode: str
-
-@dataclass
-class SelectPointAction(UIAction):
-    point_id: Optional[int]
-    point_data: Optional[Dict[str, Any]] = None
 
 @dataclass
 class ChangeAutonumModeAction(UIAction):
@@ -125,10 +118,6 @@ class SetValidationAction(UIAction):
 class SetPointInfoErrorAction(UIAction):
     has_error: bool
     is_out_of_bounds: bool = False
-
-@dataclass
-class SetSuppressCommitAction(UIAction):
-    suppress: bool
 
 @dataclass
 class ResetSelectionAction(UIAction):
@@ -246,9 +235,6 @@ class UIStateStore(QObject):
             new_state_kwargs['tab1_mode'] = action.mode
         elif isinstance(action, ChangeTab2ModeAction):
             new_state_kwargs['tab2_mode'] = action.mode
-        elif isinstance(action, SelectPointAction):
-            new_state_kwargs['selected_point_id'] = action.point_id
-            new_state_kwargs['selected_point_data'] = action.point_data
         elif isinstance(action, ChangeAutonumModeAction):
             new_state_kwargs['autonum_mode'] = action.mode
         elif isinstance(action, SetDigitizedWithBranchAction):
@@ -290,8 +276,6 @@ class UIStateStore(QObject):
         elif isinstance(action, SetPointInfoErrorAction):
             new_state_kwargs['point_info_has_error'] = action.has_error
             new_state_kwargs['is_out_of_bounds'] = action.is_out_of_bounds
-        elif isinstance(action, SetSuppressCommitAction):
-            new_state_kwargs['suppress_realtime_commit'] = action.suppress
         elif isinstance(action, SetProcessingAction):
             new_state_kwargs['is_processing'] = action.is_processing
         elif isinstance(action, UpdateDigitizingInputsAction):
@@ -309,7 +293,6 @@ class UIStateStore(QObject):
         # 状態リセット（クリーンアップ）
         elif isinstance(action, ResetSelectionAction):
             new_state_kwargs['selected_point_id'] = None
-            new_state_kwargs['selected_point_data'] = None
             new_state_kwargs['is_out_of_bounds'] = False
             new_state_kwargs['point_info_has_error'] = False
             new_state_kwargs['has_digitized_with_branch'] = False

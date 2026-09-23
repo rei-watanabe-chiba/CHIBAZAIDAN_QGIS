@@ -3,16 +3,10 @@
  PointerGeocoding Plugin - CoreUI rules (generic business-logic rule types)
  ***************************************************************************/
 
-T-0045: type contract only. tab1_image_schema.py does not currently need any
-generic rule (Tab1's new/edit mode switch has enough bespoke side effects --
-clearing ref_points_data, reloading the edit-layer combo, etc. -- that it
-stays as plain code in Tab1GeorefMixin._on_tab1_mode_changed(), per the
-CoreUI plan's "画面固有の例外は素のPyQtコードとして残してよい" escape hatch).
-
-Concrete rules (e.g. ModeVisibilityRule, RealtimeCommitRule,
-DuplicateValidationRule for Tab2's new/edit mode) are intentionally deferred
-to T-0047, once a second/third real usage confirms the right shape instead
-of guessing it from a single screen.
+Type contract for generic cross-panel business-logic rules (e.g.
+mode-driven visibility). A screen with sufficiently bespoke side effects
+may keep that logic as plain code rather than a Rule subclass; concrete
+Rule subclasses are added once a real screen needs one.
 """
 from abc import ABC, abstractmethod
 

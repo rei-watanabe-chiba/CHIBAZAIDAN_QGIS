@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-22T12:51:51",
+  "generated_at": "2026-09-23T17:41:56",
   "root": "pointer_geocoding",
   "files": {
     "pointer_geocoding/__init__.py": {
@@ -10,7 +10,8 @@
           "kind": "function",
           "start_line": 17,
           "end_line": 26,
-          "docstring": "Load PointerGeocoding plugin class from plugin.py."
+          "docstring": "Load PointerGeocoding plugin class from plugin.py.",
+          "nested": []
         }
       ]
     },
@@ -33,28 +34,32 @@
               "kind": "method",
               "start_line": 39,
               "end_line": 45,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "paint",
               "kind": "method",
               "start_line": 47,
               "end_line": 51,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "boundingRect",
               "kind": "method",
               "start_line": 53,
               "end_line": 54,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "updatePosition",
               "kind": "method",
               "start_line": 56,
               "end_line": 57,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -70,70 +75,80 @@
               "kind": "method",
               "start_line": 69,
               "end_line": 90,
-              "docstring": "Initialize preview georeferencing tool."
+              "docstring": "Initialize preview georeferencing tool.",
+              "nested": []
             },
             {
               "name": "set_ref_points_data",
               "kind": "method",
               "start_line": 92,
               "end_line": 98,
-              "docstring": "Update reference points list for hover snapping."
+              "docstring": "Update reference points list for hover snapping.",
+              "nested": []
             },
             {
               "name": "activate",
               "kind": "method",
               "start_line": 100,
               "end_line": 103,
-              "docstring": "Called when tool is activated on the preview canvas."
+              "docstring": "Called when tool is activated on the preview canvas.",
+              "nested": []
             },
             {
               "name": "deactivate",
               "kind": "method",
               "start_line": 105,
               "end_line": 109,
-              "docstring": "Called when tool is deactivated."
+              "docstring": "Called when tool is deactivated.",
+              "nested": []
             },
             {
               "name": "set_interaction_locked",
               "kind": "method",
               "start_line": 111,
               "end_line": 119,
-              "docstring": "Lock or unlock canvas interactions during heavy operations."
+              "docstring": "Lock or unlock canvas interactions during heavy operations.",
+              "nested": []
             },
             {
               "name": "canvasMoveEvent",
               "kind": "method",
               "start_line": 121,
               "end_line": 169,
-              "docstring": "Highlight nearby reference points within 15px with visual box marker on hover."
+              "docstring": "Highlight nearby reference points within 15px with visual box marker on hover.",
+              "nested": []
             },
             {
               "name": "canvasReleaseEvent",
               "kind": "method",
               "start_line": 171,
               "end_line": 199,
-              "docstring": "Process mouse release event on the preview canvas to emit pixel coordinates."
+              "docstring": "Process mouse release event on the preview canvas to emit pixel coordinates.",
+              "nested": []
             },
             {
               "name": "add_point_marker",
               "kind": "method",
               "start_line": 201,
               "end_line": 241,
-              "docstring": "Place a visual vertex marker on the preview canvas at the given pixel location."
+              "docstring": "Place a visual vertex marker on the preview canvas at the given pixel location.",
+              "nested": []
             },
             {
               "name": "clear_markers",
               "kind": "method",
               "start_line": 243,
               "end_line": 258,
-              "docstring": "Remove all visual vertex markers from the preview canvas scene."
+              "docstring": "Remove all visual vertex markers from the preview canvas scene.",
+              "nested": []
             },
             {
               "name": "clean_up",
               "kind": "method",
               "start_line": 260,
               "end_line": 268,
-              "docstring": "Clean up map tool markers."
+              "docstring": "Clean up map tool markers.",
+              "nested": []
             }
           ]
         },
@@ -141,106 +156,136 @@
           "name": "CanvasDigitizingTool",
           "kind": "class",
           "start_line": 271,
-          "end_line": 729,
+          "end_line": 739,
           "docstring": "Custom QgsMapTool for continuous artifact point digitizing on the main canvas.",
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
               "start_line": 289,
-              "end_line": 349,
-              "docstring": "Initialize the digitizing map tool."
+              "end_line": 356,
+              "docstring": "Initialize the digitizing map tool.",
+              "nested": []
             },
             {
               "name": "activate",
               "kind": "method",
-              "start_line": 351,
-              "end_line": 354,
-              "docstring": "Called when the map tool becomes active."
+              "start_line": 358,
+              "end_line": 361,
+              "docstring": "Called when the map tool becomes active.",
+              "nested": []
             },
             {
               "name": "deactivate",
               "kind": "method",
-              "start_line": 356,
-              "end_line": 362,
-              "docstring": "Called when the map tool is deactivated."
+              "start_line": 363,
+              "end_line": 369,
+              "docstring": "Called when the map tool is deactivated.",
+              "nested": []
             },
             {
               "name": "show_selected_marker",
               "kind": "method",
-              "start_line": 364,
-              "end_line": 372,
-              "docstring": "Display the persistent selection marker at the given point (T-0023)."
+              "start_line": 371,
+              "end_line": 379,
+              "docstring": "Display the persistent selection marker at the given point (T-0023).",
+              "nested": []
             },
             {
               "name": "clear_selected_marker",
               "kind": "method",
-              "start_line": 374,
-              "end_line": 382,
-              "docstring": "Hide the persistent selection marker (T-0023)."
+              "start_line": 381,
+              "end_line": 389,
+              "docstring": "Hide the persistent selection marker (T-0023).",
+              "nested": []
             },
             {
               "name": "update_focus_state",
               "kind": "method",
-              "start_line": 384,
-              "end_line": 396,
-              "docstring": "Receive Focus Mode state pushed from MainDockWidget and cache it locally."
+              "start_line": 391,
+              "end_line": 403,
+              "docstring": "Receive Focus Mode state pushed from MainDockWidget and cache it locally.",
+              "nested": []
+            },
+            {
+              "name": "update_tab2_mode",
+              "kind": "method",
+              "start_line": 405,
+              "end_line": 416,
+              "docstring": "Receive the Tab2 digitizing mode pushed from MainDockWidget and cache it locally.",
+              "nested": []
             },
             {
               "name": "find_nearest_feature_id",
               "kind": "method",
-              "start_line": 405,
-              "end_line": 527,
-              "docstring": "Find closest feature ID to map_point within 15px using QgsSpatialIndex."
+              "start_line": 425,
+              "end_line": 547,
+              "docstring": "Find closest feature ID to map_point within 15px using QgsSpatialIndex.",
+              "nested": [
+                {
+                  "name": "find_nearest_feature_id.find_best",
+                  "kind": "nested function",
+                  "start_line": 522,
+                  "end_line": 538,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "find_nearest_feature",
               "kind": "method",
-              "start_line": 529,
-              "end_line": 547,
-              "docstring": "Backward-compatible helper returning (QgsFeature, distance)."
+              "start_line": 549,
+              "end_line": 567,
+              "docstring": "Backward-compatible helper returning (QgsFeature, distance).",
+              "nested": []
             },
             {
               "name": "set_interaction_locked",
               "kind": "method",
-              "start_line": 549,
-              "end_line": 564,
-              "docstring": "Lock or unlock canvas interactions during heavy operations."
+              "start_line": 569,
+              "end_line": 584,
+              "docstring": "Lock or unlock canvas interactions during heavy operations.",
+              "nested": []
             },
             {
               "name": "is_interaction_locked",
               "kind": "method",
-              "start_line": 567,
-              "end_line": 568,
-              "docstring": null
+              "start_line": 587,
+              "end_line": 588,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "canvasMoveEvent",
               "kind": "method",
-              "start_line": 570,
-              "end_line": 622,
-              "docstring": "Handle mouse movement: highlight nearby points within 15px tolerance using QgsSpatialIndex."
+              "start_line": 590,
+              "end_line": 637,
+              "docstring": "Handle mouse movement: highlight nearby points within 15px tolerance using QgsSpatialIndex.",
+              "nested": []
             },
             {
               "name": "canvasReleaseEvent",
               "kind": "method",
-              "start_line": 624,
-              "end_line": 633,
-              "docstring": "Handle mouse button release: route to continuous digitizing logic."
+              "start_line": 639,
+              "end_line": 648,
+              "docstring": "Handle mouse button release: route to continuous digitizing logic.",
+              "nested": []
             },
             {
               "name": "_handle_digitize_click",
               "kind": "method",
-              "start_line": 635,
-              "end_line": 714,
-              "docstring": "Process click event on main georeferenced canvas."
+              "start_line": 650,
+              "end_line": 724,
+              "docstring": "Process click event on main georeferenced canvas.",
+              "nested": []
             },
             {
               "name": "clean_up",
               "kind": "method",
-              "start_line": 716,
-              "end_line": 729,
-              "docstring": "Remove canvas vertex markers safely."
+              "start_line": 726,
+              "end_line": 739,
+              "docstring": "Remove canvas vertex markers safely.",
+              "nested": []
             }
           ]
         }
@@ -265,77 +310,88 @@
               "kind": "method",
               "start_line": 40,
               "end_line": 59,
-              "docstring": "Export or append a vector layer into a GeoPackage using writeAsVectorFormatV3."
+              "docstring": "Export or append a vector layer into a GeoPackage using writeAsVectorFormatV3.",
+              "nested": []
             },
             {
               "name": "create_initial_gpkg",
               "kind": "method",
               "start_line": 62,
               "end_line": 98,
-              "docstring": "Create initial 'points' schema inside the GeoPackage."
+              "docstring": "Create initial 'points' schema inside the GeoPackage.",
+              "nested": []
             },
             {
               "name": "check_and_migrate_point_layer",
               "kind": "method",
               "start_line": 101,
               "end_line": 129,
-              "docstring": "Verify existence of required columns (drawing_name, pixel_x, pixel_y) and add them automatically if missing."
+              "docstring": "Verify existence of required columns (drawing_name, pixel_x, pixel_y) and add them automatically if missing.",
+              "nested": []
             },
             {
               "name": "_extract_field_str",
               "kind": "method",
               "start_line": 132,
               "end_line": 140,
-              "docstring": "Extract trimmed string representation from feature field, handling NULL and QVariant."
+              "docstring": "Extract trimmed string representation from feature field, handling NULL and QVariant.",
+              "nested": []
             },
             {
               "name": "_safe_str",
               "kind": "method",
               "start_line": 143,
               "end_line": 148,
-              "docstring": "Normalize arbitrary attribute value to string, handling NULL."
+              "docstring": "Normalize arbitrary attribute value to string, handling NULL.",
+              "nested": []
             },
             {
               "name": "init_spatial_index_and_cache",
               "kind": "method",
               "start_line": 150,
               "end_line": 186,
-              "docstring": "Construct QgsSpatialIndex and in-memory caches, and register Observer signal hooks."
+              "docstring": "Construct QgsSpatialIndex and in-memory caches, and register Observer signal hooks.",
+              "nested": []
             },
             {
               "name": "_disconnect_point_layer_signals",
               "kind": "method",
               "start_line": 188,
               "end_line": 207,
-              "docstring": "Safely detach Observer signal connections from the point layer."
+              "docstring": "Safely detach Observer signal connections from the point layer.",
+              "nested": []
             },
             {
               "name": "_on_feature_added",
               "kind": "method",
               "start_line": 209,
               "end_line": 227,
-              "docstring": "Synchronize spatial index and caches when a new feature is added."
+              "docstring": "Synchronize spatial index and caches when a new feature is added.",
+              "nested": []
             },
             {
               "name": "_on_features_deleted",
               "kind": "method",
               "start_line": 229,
               "end_line": 239,
-              "docstring": "Synchronize spatial index and caches when features are deleted."
+              "docstring": "Synchronize spatial index and caches when features are deleted.",
+              "nested": []
             },
             {
               "name": "_on_attribute_changed",
               "kind": "method",
               "start_line": 241,
               "end_line": 262,
-              "docstring": "Synchronize attribute cache when monitored fields change."
+              "docstring": "Synchronize attribute cache when monitored fields change.",
+              "nested": []
             },
             {
               "name": "_on_geometry_changed",
               "kind": "method",
               "start_line": 264,
               "end_line": 278,
-              "docstring": "Synchronize spatial index and geometry cache when feature geometry is modified."
+              "docstring": "Synchronize spatial index and geometry cache when feature geometry is modified.",
+              "nested": []
             }
           ]
         }
@@ -356,21 +412,24 @@
               "kind": "method",
               "start_line": 31,
               "end_line": 90,
-              "docstring": "Generate PointGeo_grid.csv containing coordinates for all small grids in the specified range."
+              "docstring": "Generate PointGeo_grid.csv containing coordinates for all small grids in the specified range.",
+              "nested": []
             },
             {
               "name": "setup_or_copy_grid_csv",
               "kind": "method",
               "start_line": 93,
               "end_line": 144,
-              "docstring": "Deploy PointGeo_grid.csv into the session directory by copy or automatic generation."
+              "docstring": "Deploy PointGeo_grid.csv into the session directory by copy or automatic generation.",
+              "nested": []
             },
             {
               "name": "load_grid_csv_to_memory",
               "kind": "method",
               "start_line": 146,
               "end_line": 248,
-              "docstring": "Load PointGeo_grid.csv into memory cache."
+              "docstring": "Load PointGeo_grid.csv into memory cache.",
+              "nested": []
             }
           ]
         }
@@ -391,35 +450,40 @@
               "kind": "method",
               "start_line": 63,
               "end_line": 86,
-              "docstring": "Initialize LayerManager with an optional QgsInterface reference."
+              "docstring": "Initialize LayerManager with an optional QgsInterface reference.",
+              "nested": []
             },
             {
               "name": "session_image_dir",
               "kind": "method",
               "start_line": 89,
               "end_line": 93,
-              "docstring": "Return path to the session image/ directory if session is initialized."
+              "docstring": "Return path to the session image/ directory if session is initialized.",
+              "nested": []
             },
             {
               "name": "session_json_dir",
               "kind": "method",
               "start_line": 96,
               "end_line": 100,
-              "docstring": "Return path to the session json/ directory if session is initialized."
+              "docstring": "Return path to the session json/ directory if session is initialized.",
+              "nested": []
             },
             {
               "name": "clear_drawing_name_for_layer",
               "kind": "method",
               "start_line": 102,
               "end_line": 125,
-              "docstring": "Clear the drawing_name attribute on point_layer features referencing layer_name."
+              "docstring": "Clear the drawing_name attribute on point_layer features referencing layer_name.",
+              "nested": []
             },
             {
               "name": "rename_drawing_name",
               "kind": "method",
               "start_line": 127,
               "end_line": 150,
-              "docstring": "Rename the drawing_name attribute from old_name to new_name on point_layer."
+              "docstring": "Rename the drawing_name attribute from old_name to new_name on point_layer.",
+              "nested": []
             }
           ]
         }
@@ -433,14 +497,16 @@
           "kind": "function",
           "start_line": 25,
           "end_line": 45,
-          "docstring": "Safely load JSON data from a file path."
+          "docstring": "Safely load JSON data from a file path.",
+          "nested": []
         },
         {
           "name": "safe_json_save",
           "kind": "function",
           "start_line": 48,
           "end_line": 76,
-          "docstring": "Safely write `data` as JSON to `path`."
+          "docstring": "Safely write `data` as JSON to `path`.",
+          "nested": []
         },
         {
           "name": "PluginSettings",
@@ -454,42 +520,48 @@
               "kind": "method",
               "start_line": 95,
               "end_line": 97,
-              "docstring": "Convert settings to standard dictionary."
+              "docstring": "Convert settings to standard dictionary.",
+              "nested": []
             },
             {
               "name": "from_dict",
               "kind": "method",
               "start_line": 100,
               "end_line": 104,
-              "docstring": "Instantiate settings from a dictionary, filtering unknown keys."
+              "docstring": "Instantiate settings from a dictionary, filtering unknown keys.",
+              "nested": []
             },
             {
               "name": "get",
               "kind": "method",
               "start_line": 106,
               "end_line": 108,
-              "docstring": "Dictionary-compatible .get() method."
+              "docstring": "Dictionary-compatible .get() method.",
+              "nested": []
             },
             {
               "name": "__getitem__",
               "kind": "method",
               "start_line": 110,
               "end_line": 114,
-              "docstring": "Dictionary-compatible indexing."
+              "docstring": "Dictionary-compatible indexing.",
+              "nested": []
             },
             {
               "name": "__setitem__",
               "kind": "method",
               "start_line": 116,
               "end_line": 118,
-              "docstring": "Dictionary-compatible assignment."
+              "docstring": "Dictionary-compatible assignment.",
+              "nested": []
             },
             {
               "name": "__contains__",
               "kind": "method",
               "start_line": 120,
               "end_line": 122,
-              "docstring": "Dictionary-compatible 'in' operator."
+              "docstring": "Dictionary-compatible 'in' operator.",
+              "nested": []
             }
           ]
         },
@@ -505,14 +577,16 @@
               "kind": "method",
               "start_line": 134,
               "end_line": 136,
-              "docstring": "Convert reference point metadata to dictionary."
+              "docstring": "Convert reference point metadata to dictionary.",
+              "nested": []
             },
             {
               "name": "from_dict",
               "kind": "method",
               "start_line": 139,
               "end_line": 147,
-              "docstring": "Construct RefPointMeta from dictionary."
+              "docstring": "Construct RefPointMeta from dictionary.",
+              "nested": []
             }
           ]
         },
@@ -528,42 +602,48 @@
               "kind": "method",
               "start_line": 157,
               "end_line": 163,
-              "docstring": "Convert image layer metadata to dictionary."
+              "docstring": "Convert image layer metadata to dictionary.",
+              "nested": []
             },
             {
               "name": "from_dict",
               "kind": "method",
               "start_line": 166,
               "end_line": 172,
-              "docstring": "Construct ImageLayerMeta from dictionary."
+              "docstring": "Construct ImageLayerMeta from dictionary.",
+              "nested": []
             },
             {
               "name": "get",
               "kind": "method",
               "start_line": 174,
               "end_line": 176,
-              "docstring": "Dictionary-compatible .get() method."
+              "docstring": "Dictionary-compatible .get() method.",
+              "nested": []
             },
             {
               "name": "__getitem__",
               "kind": "method",
               "start_line": 178,
               "end_line": 182,
-              "docstring": "Dictionary-compatible indexing."
+              "docstring": "Dictionary-compatible indexing.",
+              "nested": []
             },
             {
               "name": "__setitem__",
               "kind": "method",
               "start_line": 184,
               "end_line": 186,
-              "docstring": "Dictionary-compatible assignment."
+              "docstring": "Dictionary-compatible assignment.",
+              "nested": []
             },
             {
               "name": "__contains__",
               "kind": "method",
               "start_line": 188,
               "end_line": 190,
-              "docstring": "Dictionary-compatible 'in' operator."
+              "docstring": "Dictionary-compatible 'in' operator.",
+              "nested": []
             }
           ]
         },
@@ -572,14 +652,16 @@
           "kind": "function",
           "start_line": 197,
           "end_line": 205,
-          "docstring": "Return the custom local orthogonal CRS (GRS80 Transverse Mercator)."
+          "docstring": "Return the custom local orthogonal CRS (GRS80 Transverse Mercator).",
+          "nested": []
         },
         {
           "name": "suppress_crs_prompt",
           "kind": "function",
           "start_line": 209,
           "end_line": 220,
-          "docstring": "Context manager to temporarily suppress the QGIS CRS selection prompt."
+          "docstring": "Context manager to temporarily suppress the QGIS CRS selection prompt.",
+          "nested": []
         }
       ]
     },
@@ -598,56 +680,64 @@
               "kind": "method",
               "start_line": 33,
               "end_line": 137,
-              "docstring": "Build the automated session folder structure, GeoPackage, and QGIS project."
+              "docstring": "Build the automated session folder structure, GeoPackage, and QGIS project.",
+              "nested": []
             },
             {
               "name": "copy_image_to_session",
               "kind": "method",
               "start_line": 139,
               "end_line": 175,
-              "docstring": "Copy a user-selected drawing image to the session's image/ directory."
+              "docstring": "Copy a user-selected drawing image to the session's image/ directory.",
+              "nested": []
             },
             {
               "name": "write_world_file",
               "kind": "method",
               "start_line": 178,
               "end_line": 234,
-              "docstring": "Generate an ESRI 6-line world file (tfw/pgw/jgw/wld) based on affine parameters."
+              "docstring": "Generate an ESRI 6-line world file (tfw/pgw/jgw/wld) based on affine parameters.",
+              "nested": []
             },
             {
               "name": "load_preview_raster",
               "kind": "method",
               "start_line": 237,
               "end_line": 252,
-              "docstring": "Load a standalone raster layer for display in a preview map canvas."
+              "docstring": "Load a standalone raster layer for display in a preview map canvas.",
+              "nested": []
             },
             {
               "name": "load_georeferenced_raster",
               "kind": "method",
               "start_line": 254,
               "end_line": 295,
-              "docstring": "Load the georeferenced raster image into QgsProject under '画像ファイル' group."
+              "docstring": "Load the georeferenced raster image into QgsProject under '画像ファイル' group.",
+              "nested": []
             },
             {
               "name": "save_ref_points",
               "kind": "method",
               "start_line": 297,
               "end_line": 328,
-              "docstring": "Persist reference point definitions into the GeoPackage ref_points layer."
+              "docstring": "Persist reference point definitions into the GeoPackage ref_points layer.",
+              "nested": []
             },
             {
               "name": "load_existing_session",
               "kind": "method",
               "start_line": 330,
               "end_line": 450,
-              "docstring": "Load an existing QGIS session project and locate its vector and raster layers."
+              "docstring": "Load an existing QGIS session project and locate its vector and raster layers.",
+              "nested": []
             },
             {
               "name": "save_project",
               "kind": "method",
               "start_line": 452,
               "end_line": 459,
-              "docstring": "Write current project changes to disk."
+              "docstring": "Write current project changes to disk.",
+              "nested": []
             }
           ]
         }
@@ -668,70 +758,80 @@
               "kind": "method",
               "start_line": 21,
               "end_line": 25,
-              "docstring": "Return the absolute path to settings.json."
+              "docstring": "Return the absolute path to settings.json.",
+              "nested": []
             },
             {
               "name": "load_settings",
               "kind": "method",
               "start_line": 30,
               "end_line": 45,
-              "docstring": "Load settings from json/settings.json."
+              "docstring": "Load settings from json/settings.json.",
+              "nested": []
             },
             {
               "name": "load_settings_dataclass",
               "kind": "method",
               "start_line": 47,
               "end_line": 53,
-              "docstring": "Load settings from json/settings.json as a PluginSettings instance."
+              "docstring": "Load settings from json/settings.json as a PluginSettings instance.",
+              "nested": []
             },
             {
               "name": "save_settings",
               "kind": "method",
               "start_line": 55,
               "end_line": 72,
-              "docstring": "Persist settings to json/settings.json."
+              "docstring": "Persist settings to json/settings.json.",
+              "nested": []
             },
             {
               "name": "ensure_json_dir",
               "kind": "method",
               "start_line": 74,
               "end_line": 80,
-              "docstring": "Create the session json/ directory if it does not exist."
+              "docstring": "Create the session json/ directory if it does not exist.",
+              "nested": []
             },
             {
               "name": "get_image_metadata_path",
               "kind": "method",
               "start_line": 82,
               "end_line": 86,
-              "docstring": "Get the path to image_metadata.json."
+              "docstring": "Get the path to image_metadata.json.",
+              "nested": []
             },
             {
               "name": "load_image_metadata",
               "kind": "method",
               "start_line": 88,
               "end_line": 90,
-              "docstring": "Load image metadata from JSON file."
+              "docstring": "Load image metadata from JSON file.",
+              "nested": []
             },
             {
               "name": "save_image_metadata",
               "kind": "method",
               "start_line": 92,
               "end_line": 112,
-              "docstring": "Save image metadata to JSON file."
+              "docstring": "Save image metadata to JSON file.",
+              "nested": []
             },
             {
               "name": "update_image_metadata",
               "kind": "method",
               "start_line": 114,
               "end_line": 129,
-              "docstring": "Update or add metadata for a specific image layer using ImageLayerMeta."
+              "docstring": "Update or add metadata for a specific image layer using ImageLayerMeta.",
+              "nested": []
             },
             {
               "name": "delete_image_metadata",
               "kind": "method",
               "start_line": 131,
               "end_line": 140,
-              "docstring": "Remove metadata for a specific image layer."
+              "docstring": "Remove metadata for a specific image layer.",
+              "nested": []
             }
           ]
         }
@@ -752,56 +852,72 @@
               "kind": "method",
               "start_line": 60,
               "end_line": 84,
-              "docstring": "Apply dynamic expression-based labeling to the points layer."
+              "docstring": "Apply dynamic expression-based labeling to the points layer.",
+              "nested": []
             },
             {
               "name": "apply_point_symbology",
               "kind": "method",
               "start_line": 87,
               "end_line": 250,
-              "docstring": "Apply categorical symbology for attribute types S, P, C, and SP."
+              "docstring": "Apply categorical symbology for attribute types S, P, C, and SP.",
+              "nested": []
             },
             {
               "name": "apply_ref_point_cross_symbology",
               "kind": "method",
               "start_line": 253,
               "end_line": 282,
-              "docstring": "Apply a simple cross symbol style for a main-canvas reference point layer."
+              "docstring": "Apply a simple cross symbol style for a main-canvas reference point layer.",
+              "nested": []
             },
             {
               "name": "apply_attribute_transparency",
               "kind": "method",
               "start_line": 285,
               "end_line": 314,
-              "docstring": "Set unselected attribute category symbols to 50% opacity and selected category to 100%."
+              "docstring": "Set unselected attribute category symbols to 50% opacity and selected category to 100%.",
+              "nested": []
             },
             {
               "name": "apply_above_right_label_quadrant",
               "kind": "method",
               "start_line": 317,
               "end_line": 340,
-              "docstring": "Align label anchor so its bottom-left sits exactly at the insertion point."
+              "docstring": "Align label anchor so its bottom-left sits exactly at the insertion point.",
+              "nested": []
             },
             {
               "name": "apply_ref_point_symbology",
               "kind": "method",
               "start_line": 343,
               "end_line": 426,
-              "docstring": "Apply cross symbol style and rule-based rendering for reference points."
+              "docstring": "Apply cross symbol style and rule-based rendering for reference points.",
+              "nested": []
             },
             {
               "name": "build_opacity_expression",
               "kind": "method",
               "start_line": 429,
               "end_line": 518,
-              "docstring": "Build the QgsProperty expression string controlling per-category point opacity."
+              "docstring": "Build the QgsProperty expression string controlling per-category point opacity.",
+              "nested": [
+                {
+                  "name": "build_opacity_expression._escape_sql",
+                  "kind": "nested function",
+                  "start_line": 457,
+                  "end_line": 458,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "apply_opacity_expression",
               "kind": "method",
               "start_line": 521,
               "end_line": 584,
-              "docstring": "Apply a QgsProperty opacity expression to every category symbol and label of a layer."
+              "docstring": "Apply a QgsProperty opacity expression to every category symbol and label of a layer.",
+              "nested": []
             }
           ]
         }
@@ -835,126 +951,144 @@
           "kind": "function",
           "start_line": 55,
           "end_line": 75,
-          "docstring": "Convert standard mathematical/canvas coordinates to survey coordinates."
+          "docstring": "Convert standard mathematical/canvas coordinates to survey coordinates.",
+          "nested": []
         },
         {
           "name": "from_survey_coords",
           "kind": "function",
           "start_line": 78,
           "end_line": 98,
-          "docstring": "Convert survey coordinates to standard mathematical/canvas coordinates."
+          "docstring": "Convert survey coordinates to standard mathematical/canvas coordinates.",
+          "nested": []
         },
         {
           "name": "batch_update_attributes",
           "kind": "function",
           "start_line": 105,
           "end_line": 150,
-          "docstring": "Encapsulate the startEditing -> field index resolution -> changeAttributeValue"
+          "docstring": "Encapsulate the startEditing -> field index resolution -> changeAttributeValue",
+          "nested": []
         },
         {
           "name": "update_point_layer_geometry",
           "kind": "function",
           "start_line": 153,
           "end_line": 219,
-          "docstring": "Batch update real/canvas coordinates and geometries for points matching drawing_name"
+          "docstring": "Batch update real/canvas coordinates and geometries for points matching drawing_name",
+          "nested": []
         },
         {
           "name": "evaluate_residuals",
           "kind": "function",
           "start_line": 226,
           "end_line": 259,
-          "docstring": "Calculate overall transformation indicators: image rotation angle (degrees) and aspect ratio change (%)."
+          "docstring": "Calculate overall transformation indicators: image rotation angle (degrees) and aspect ratio change (%).",
+          "nested": []
         },
         {
           "name": "check_point_duplicate",
           "kind": "function",
           "start_line": 266,
           "end_line": 327,
-          "docstring": "Check whether a point with the same identification attributes already exists."
+          "docstring": "Check whether a point with the same identification attributes already exists.",
+          "nested": []
         },
         {
           "name": "build_point_ident",
           "kind": "function",
           "start_line": 330,
           "end_line": 377,
-          "docstring": "Build a human-readable identifier string for a digitized point."
+          "docstring": "Build a human-readable identifier string for a digitized point.",
+          "nested": []
         },
         {
           "name": "check_duplicate_and_build_message",
           "kind": "function",
           "start_line": 380,
           "end_line": 411,
-          "docstring": "Check for a duplicate point and, if found, return its formatted identifier."
+          "docstring": "Check for a duplicate point and, if found, return its formatted identifier.",
+          "nested": []
         },
         {
           "name": "get_next_point_number",
           "kind": "function",
           "start_line": 414,
           "end_line": 477,
-          "docstring": "Determine the next point number by following the most recently digitized point."
+          "docstring": "Determine the next point number by following the most recently digitized point.",
+          "nested": []
         },
         {
           "name": "build_digitized_feature",
           "kind": "function",
           "start_line": 480,
           "end_line": 533,
-          "docstring": "Construct a complete QgsFeature ready for insertion into the points layer."
+          "docstring": "Construct a complete QgsFeature ready for insertion into the points layer.",
+          "nested": []
         },
         {
           "name": "get_next_point_id",
           "kind": "function",
           "start_line": 536,
           "end_line": 554,
-          "docstring": "Determine the next available integer point_id (primary key) across the whole layer."
+          "docstring": "Determine the next available integer point_id (primary key) across the whole layer.",
+          "nested": []
         },
         {
           "name": "insert_feature_to_layer",
           "kind": "function",
           "start_line": 557,
           "end_line": 578,
-          "docstring": "Insert a single feature into a vector layer via an edit session and repaint."
+          "docstring": "Insert a single feature into a vector layer via an edit session and repaint.",
+          "nested": []
         },
         {
           "name": "to_excel_column",
           "kind": "function",
           "start_line": 585,
           "end_line": 599,
-          "docstring": "Convert a 1-based index into an Excel-style column letter (1 -> 'A', 26 -> 'Z', 27 -> 'AA', 79 -> 'CA')."
+          "docstring": "Convert a 1-based index into an Excel-style column letter (1 -> 'A', 26 -> 'Z', 27 -> 'AA', 79 -> 'CA').",
+          "nested": []
         },
         {
           "name": "from_excel_column",
           "kind": "function",
           "start_line": 602,
           "end_line": 616,
-          "docstring": "Convert Excel-style column alphabet to 1-based index (e.g. 'A'->1, 'Z'->26, 'AA'->27)."
+          "docstring": "Convert Excel-style column alphabet to 1-based index (e.g. 'A'->1, 'Z'->26, 'AA'->27).",
+          "nested": []
         },
         {
           "name": "pixel_from_affine",
           "kind": "function",
           "start_line": 623,
           "end_line": 655,
-          "docstring": "Invert the forward affine transform to recover local drawing pixel coordinates."
+          "docstring": "Invert the forward affine transform to recover local drawing pixel coordinates.",
+          "nested": []
         },
         {
           "name": "safe_get_str",
           "kind": "function",
           "start_line": 662,
           "end_line": 688,
-          "docstring": "Safely read a QgsFeature attribute as a trimmed string, guarding NULL/missing values."
+          "docstring": "Safely read a QgsFeature attribute as a trimmed string, guarding NULL/missing values.",
+          "nested": []
         },
         {
           "name": "safe_get_float",
           "kind": "function",
           "start_line": 691,
           "end_line": 713,
-          "docstring": "Safely read a QgsFeature attribute as a float, guarding NULL/missing/invalid values."
+          "docstring": "Safely read a QgsFeature attribute as a float, guarding NULL/missing/invalid values.",
+          "nested": []
         },
         {
           "name": "safe_get_int",
           "kind": "function",
           "start_line": 716,
           "end_line": 738,
-          "docstring": "Safely read a QgsFeature attribute as an int, guarding NULL/missing/invalid values."
+          "docstring": "Safely read a QgsFeature attribute as an int, guarding NULL/missing/invalid values.",
+          "nested": []
         }
       ]
     },
@@ -973,49 +1107,64 @@
               "kind": "method",
               "start_line": 41,
               "end_line": 50,
-              "docstring": "Initialize CoordinateTransformer."
+              "docstring": "Initialize CoordinateTransformer.",
+              "nested": []
             },
             {
               "name": "compute_helmert_2p",
               "kind": "method",
               "start_line": 53,
               "end_line": 109,
-              "docstring": "Compute 2-point Helmert (similarity) transformation parameters in standard mathematical coordinates."
+              "docstring": "Compute 2-point Helmert (similarity) transformation parameters in standard mathematical coordinates.",
+              "nested": []
             },
             {
               "name": "apply_helmert",
               "kind": "method",
               "start_line": 112,
               "end_line": 120,
-              "docstring": "Apply Helmert transformation formula to a local coordinate in standard mathematical system."
+              "docstring": "Apply Helmert transformation formula to a local coordinate in standard mathematical system.",
+              "nested": []
             },
             {
               "name": "apply_affine",
               "kind": "method",
               "start_line": 123,
               "end_line": 130,
-              "docstring": "Apply Affine transformation formula to a local coordinate in standard mathematical system."
+              "docstring": "Apply Affine transformation formula to a local coordinate in standard mathematical system.",
+              "nested": []
             },
             {
               "name": "compute_affine_points",
               "kind": "method",
               "start_line": 133,
               "end_line": 260,
-              "docstring": "Compute Affine / Helmert transformation parameters (A, B, C, D, E, F)"
+              "docstring": "Compute Affine / Helmert transformation parameters (A, B, C, D, E, F)",
+              "nested": [
+                {
+                  "name": "compute_affine_points.residuals",
+                  "kind": "nested function",
+                  "start_line": 202,
+                  "end_line": 218,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "execute_transformation",
               "kind": "method",
               "start_line": 262,
               "end_line": 358,
-              "docstring": "Perform coordinate transformation in standard mathematical system and update point features."
+              "docstring": "Perform coordinate transformation in standard mathematical system and update point features.",
+              "nested": []
             },
             {
               "name": "reset_real_coordinates",
               "kind": "method",
               "start_line": 360,
               "end_line": 376,
-              "docstring": "Reset real_x and real_y fields in points layer to NULL when reference point configuration changes."
+              "docstring": "Reset real_x and real_y fields in points layer to NULL when reference point configuration changes.",
+              "nested": []
             }
           ]
         },
@@ -1024,7 +1173,8 @@
           "kind": "function",
           "start_line": 379,
           "end_line": 468,
-          "docstring": "Export digitized points to a CSV file with full headers."
+          "docstring": "Export digitized points to a CSV file with full headers.",
+          "nested": []
         }
       ]
     },
@@ -1043,49 +1193,56 @@
               "kind": "method",
               "start_line": 24,
               "end_line": 32,
-              "docstring": "Initialize the plugin instance."
+              "docstring": "Initialize the plugin instance.",
+              "nested": []
             },
             {
               "name": "_get_icon",
               "kind": "method",
               "start_line": 34,
               "end_line": 57,
-              "docstring": "Obtain the plugin icon from SVG/PNG file or generate a fallback icon dynamically."
+              "docstring": "Obtain the plugin icon from SVG/PNG file or generate a fallback icon dynamically.",
+              "nested": []
             },
             {
               "name": "initGui",
               "kind": "method",
               "start_line": 59,
               "end_line": 74,
-              "docstring": "Initialize and register plugin actions directly under pluginMenu and in dedicated toolbar."
+              "docstring": "Initialize and register plugin actions directly under pluginMenu and in dedicated toolbar.",
+              "nested": []
             },
             {
               "name": "unload",
               "kind": "method",
               "start_line": 76,
               "end_line": 92,
-              "docstring": "Remove GUI elements, unregister menus and toolbars, and close active docks."
+              "docstring": "Remove GUI elements, unregister menus and toolbars, and close active docks.",
+              "nested": []
             },
             {
               "name": "_teardown_dock_widget",
               "kind": "method",
               "start_line": 94,
               "end_line": 101,
-              "docstring": "Unregister and dispose of the main dock widget (T-0024)."
+              "docstring": "Unregister and dispose of the main dock widget (T-0024).",
+              "nested": []
             },
             {
               "name": "run",
               "kind": "method",
               "start_line": 103,
               "end_line": 164,
-              "docstring": "Execute the plugin launch sequence: check dirty state, show start dialog, and initialize session."
+              "docstring": "Execute the plugin launch sequence: check dirty state, show start dialog, and initialize session.",
+              "nested": []
             },
             {
               "name": "_setup_dock_widget",
               "kind": "method",
               "start_line": 166,
               "end_line": 186,
-              "docstring": "Instantiate and attach the main dock widget to the QGIS interface."
+              "docstring": "Instantiate and attach the main dock widget to the QGIS interface.",
+              "nested": []
             }
           ]
         }
@@ -1142,7 +1299,7 @@
           "name": "UIMessages",
           "kind": "class",
           "start_line": 302,
-          "end_line": 388,
+          "end_line": 392,
           "docstring": null,
           "methods": []
         }
@@ -1167,77 +1324,103 @@
               "kind": "method",
               "start_line": 68,
               "end_line": 82,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get",
               "kind": "method",
               "start_line": 84,
               "end_line": 85,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get_row",
               "kind": "method",
               "start_line": 87,
               "end_line": 88,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get_buttons",
               "kind": "method",
               "start_line": 90,
               "end_line": 91,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "bind",
               "kind": "method",
               "start_line": 93,
               "end_line": 95,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "auto_bind",
               "kind": "method",
               "start_line": 97,
               "end_line": 118,
-              "docstring": "PanelSpecのイベントフック名に対応するUIActionを自動発行し、"
+              "docstring": "PanelSpecのイベントフック名に対応するUIActionを自動発行し、",
+              "nested": [
+                {
+                  "name": "auto_bind.create_bound_callback",
+                  "kind": "nested function",
+                  "start_line": 111,
+                  "end_line": 116,
+                  "docstring": null
+                },
+                {
+                  "name": "auto_bind.create_bound_callback.callback",
+                  "kind": "nested function",
+                  "start_line": 112,
+                  "end_line": 115,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "get_value",
               "kind": "method",
               "start_line": 120,
               "end_line": 148,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "set_value",
               "kind": "method",
               "start_line": 150,
               "end_line": 192,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_set_color_button",
               "kind": "method",
               "start_line": 195,
               "end_line": 197,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "collect_values",
               "kind": "method",
               "start_line": 199,
               "end_line": 204,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "set_values",
               "kind": "method",
               "start_line": 206,
               "end_line": 210,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1253,140 +1436,192 @@
               "kind": "method",
               "start_line": 215,
               "end_line": 250,
-              "docstring": null
+              "docstring": null,
+              "nested": [
+                {
+                  "name": "build.register_hook",
+                  "kind": "nested function",
+                  "start_line": 227,
+                  "end_line": 229,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "_apply_button_style",
               "kind": "method",
               "start_line": 253,
               "end_line": 256,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_make_button",
               "kind": "method",
               "start_line": 259,
               "end_line": 264,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_flex_row_unlimited",
               "kind": "method",
               "start_line": 267,
               "end_line": 302,
-              "docstring": "UIStyleHelper.build_flex_rowの代替。要素数制限(3個)をなくした内部レイアウトヘルパー"
+              "docstring": "UIStyleHelper.build_flex_rowの代替。要素数制限(3個)をなくした内部レイアウトヘルパー",
+              "nested": []
             },
             {
               "name": "_build_lineedit_row",
               "kind": "method",
               "start_line": 305,
               "end_line": 326,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_combobox_row",
               "kind": "method",
               "start_line": 329,
               "end_line": 339,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_button",
               "kind": "method",
               "start_line": 342,
               "end_line": 352,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_button_row",
               "kind": "method",
               "start_line": 355,
               "end_line": 367,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_table",
               "kind": "method",
               "start_line": 370,
               "end_line": 381,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_radio_row",
               "kind": "method",
               "start_line": 384,
               "end_line": 414,
-              "docstring": null
+              "docstring": null,
+              "nested": [
+                {
+                  "name": "_build_radio_row.connect_index_hook",
+                  "kind": "nested function",
+                  "start_line": 398,
+                  "end_line": 400,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "_build_segmented_toggle",
               "kind": "method",
               "start_line": 417,
               "end_line": 435,
-              "docstring": null
+              "docstring": null,
+              "nested": [
+                {
+                  "name": "_build_segmented_toggle.connect_index_hook",
+                  "kind": "nested function",
+                  "start_line": 424,
+                  "end_line": 426,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "_build_spinbox_row",
               "kind": "method",
               "start_line": 438,
               "end_line": 451,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_section_header",
               "kind": "method",
               "start_line": 454,
               "end_line": 457,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_double_spinbox_row",
               "kind": "method",
               "start_line": 460,
               "end_line": 468,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_color_button_row",
               "kind": "method",
               "start_line": 471,
               "end_line": 476,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_row_group",
               "kind": "method",
               "start_line": 479,
               "end_line": 487,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_spacer",
               "kind": "method",
               "start_line": 490,
               "end_line": 493,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_info_panel",
               "kind": "method",
               "start_line": 496,
               "end_line": 523,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_build_checkbox_row",
               "kind": "method",
               "start_line": 526,
               "end_line": 557,
-              "docstring": null
+              "docstring": null,
+              "nested": [
+                {
+                  "name": "_build_checkbox_row.connect_hook",
+                  "kind": "nested function",
+                  "start_line": 542,
+                  "end_line": 544,
+                  "docstring": null
+                }
+              ]
             },
             {
               "name": "_build_list_widget",
               "kind": "method",
               "start_line": 560,
               "end_line": 580,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         }
@@ -1452,7 +1687,8 @@
               "kind": "method",
               "start_line": 31,
               "end_line": 37,
-              "docstring": "Wire this rule's behavior onto an already-built BuiltPanel."
+              "docstring": "Wire this rule's behavior onto an already-built BuiltPanel.",
+              "nested": []
             }
           ]
         }
@@ -1465,274 +1701,264 @@
           "name": "UIState",
           "kind": "class",
           "start_line": 6,
-          "end_line": 50,
+          "end_line": 48,
           "docstring": "メイン画面（Dockおよび各Tab）の表示・動作状態を保持する不変データモデル",
           "methods": []
         },
         {
           "name": "UIAction",
           "kind": "class",
-          "start_line": 52,
-          "end_line": 54,
+          "start_line": 50,
+          "end_line": 52,
           "docstring": "状態更新の意図を表現する基底クラス",
           "methods": []
         },
         {
           "name": "ChangeTab1ModeAction",
           "kind": "class",
-          "start_line": 60,
-          "end_line": 61,
+          "start_line": 58,
+          "end_line": 59,
           "docstring": null,
           "methods": []
         },
         {
           "name": "ChangeTab2ModeAction",
           "kind": "class",
-          "start_line": 64,
-          "end_line": 65,
-          "docstring": null,
-          "methods": []
-        },
-        {
-          "name": "SelectPointAction",
-          "kind": "class",
-          "start_line": 68,
-          "end_line": 70,
+          "start_line": 62,
+          "end_line": 63,
           "docstring": null,
           "methods": []
         },
         {
           "name": "ChangeAutonumModeAction",
           "kind": "class",
-          "start_line": 73,
-          "end_line": 74,
+          "start_line": 66,
+          "end_line": 67,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetDigitizedWithBranchAction",
           "kind": "class",
-          "start_line": 77,
-          "end_line": 78,
+          "start_line": 70,
+          "end_line": 71,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SelectDrawingAction",
           "kind": "class",
-          "start_line": 81,
-          "end_line": 82,
+          "start_line": 74,
+          "end_line": 75,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetGeorefStateAction",
           "kind": "class",
-          "start_line": 88,
-          "end_line": 93,
+          "start_line": 81,
+          "end_line": 86,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetFocusModeAction",
           "kind": "class",
-          "start_line": 99,
-          "end_line": 100,
+          "start_line": 92,
+          "end_line": 93,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetDisplayFiltersAction",
           "kind": "class",
-          "start_line": 103,
-          "end_line": 104,
+          "start_line": 96,
+          "end_line": 97,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetFeatureCacheAction",
           "kind": "class",
-          "start_line": 107,
-          "end_line": 109,
+          "start_line": 100,
+          "end_line": 102,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetPointInfoSummaryAction",
           "kind": "class",
-          "start_line": 112,
-          "end_line": 113,
+          "start_line": 105,
+          "end_line": 106,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetValidationAction",
           "kind": "class",
-          "start_line": 119,
-          "end_line": 122,
+          "start_line": 112,
+          "end_line": 115,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetPointInfoErrorAction",
           "kind": "class",
-          "start_line": 125,
-          "end_line": 127,
-          "docstring": null,
-          "methods": []
-        },
-        {
-          "name": "SetSuppressCommitAction",
-          "kind": "class",
-          "start_line": 130,
-          "end_line": 131,
+          "start_line": 118,
+          "end_line": 120,
           "docstring": null,
           "methods": []
         },
         {
           "name": "ResetSelectionAction",
           "kind": "class",
-          "start_line": 134,
-          "end_line": 135,
+          "start_line": 123,
+          "end_line": 124,
           "docstring": null,
           "methods": []
         },
         {
           "name": "SetProcessingAction",
           "kind": "class",
-          "start_line": 138,
-          "end_line": 139,
+          "start_line": 127,
+          "end_line": 128,
           "docstring": null,
           "methods": []
         },
         {
           "name": "UpdateDigitizingInputsAction",
           "kind": "class",
-          "start_line": 142,
-          "end_line": 143,
+          "start_line": 131,
+          "end_line": 132,
           "docstring": null,
           "methods": []
         },
         {
           "name": "UpdateOutputSettingsAction",
           "kind": "class",
-          "start_line": 149,
-          "end_line": 151,
+          "start_line": 138,
+          "end_line": 140,
           "docstring": null,
           "methods": []
         },
         {
           "name": "ValidateDigitizingInputsAction",
           "kind": "class",
-          "start_line": 157,
-          "end_line": 159,
+          "start_line": 146,
+          "end_line": 148,
           "docstring": "UIの入力状態のリアルタイムバリデーションと同期を要求するAction",
           "methods": []
         },
         {
           "name": "CanvasClickAction",
           "kind": "class",
-          "start_line": 162,
-          "end_line": 164,
+          "start_line": 151,
+          "end_line": 153,
           "docstring": "キャンバスがクリックされた時のAction (新規打刻のトリガー)",
           "methods": []
         },
         {
           "name": "AddManualDigitizedPointAction",
           "kind": "class",
-          "start_line": 167,
-          "end_line": 171,
+          "start_line": 156,
+          "end_line": 160,
           "docstring": "リリースモード等で手動入力された名前で点を追加するAction",
           "methods": []
         },
         {
           "name": "DeletePointAction",
           "kind": "class",
-          "start_line": 174,
-          "end_line": 176,
+          "start_line": 163,
+          "end_line": 165,
           "docstring": "指定されたIDの点を削除するAction",
           "methods": []
         },
         {
           "name": "UpdatePointAttributesAction",
           "kind": "class",
-          "start_line": 179,
-          "end_line": 182,
+          "start_line": 168,
+          "end_line": 171,
           "docstring": "既存点の属性を更新するAction",
           "methods": []
         },
         {
           "name": "UpdateFeatureCategoryAction",
           "kind": "class",
-          "start_line": 185,
-          "end_line": 189,
+          "start_line": 174,
+          "end_line": 178,
           "docstring": "遺構名・カラーを一括更新するAction",
           "methods": []
         },
         {
           "name": "ChangeRefPointVisibilityAction",
           "kind": "class",
-          "start_line": 192,
-          "end_line": 194,
+          "start_line": 181,
+          "end_line": 183,
           "docstring": "基準点の表示/非表示を切り替えるAction",
           "methods": []
         },
         {
           "name": "ChangeDrawingVisibilityAction",
           "kind": "class",
-          "start_line": 197,
-          "end_line": 200,
+          "start_line": 186,
+          "end_line": 189,
           "docstring": "図面（画像）の表示/非表示を切り替えるAction",
           "methods": []
         },
         {
           "name": "UIStateStore",
           "kind": "class",
-          "start_line": 203,
-          "end_line": 329,
+          "start_line": 192,
+          "end_line": 312,
           "docstring": null,
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
-              "start_line": 206,
-              "end_line": 208,
-              "docstring": null
+              "start_line": 195,
+              "end_line": 197,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "state",
               "kind": "method",
-              "start_line": 211,
-              "end_line": 212,
-              "docstring": null
+              "start_line": 200,
+              "end_line": 201,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "dispatch_silent",
               "kind": "method",
-              "start_line": 214,
-              "end_line": 215,
-              "docstring": null
+              "start_line": 203,
+              "end_line": 204,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "dispatch",
               "kind": "method",
-              "start_line": 217,
-              "end_line": 218,
-              "docstring": null
+              "start_line": 206,
+              "end_line": 207,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "dispatch_batch",
               "kind": "method",
-              "start_line": 220,
-              "end_line": 235,
-              "docstring": "複数のUIActionを一括適用し、変更差分を統合して1回のみ state_changed シグナルを発行する。"
+              "start_line": 209,
+              "end_line": 224,
+              "docstring": "複数のUIActionを一括適用し、変更差分を統合して1回のみ state_changed シグナルを発行する。",
+              "nested": []
             },
             {
               "name": "_apply_action",
               "kind": "method",
-              "start_line": 237,
-              "end_line": 329,
-              "docstring": "アクションを現在の状態に適用し、差分を返す。"
+              "start_line": 226,
+              "end_line": 312,
+              "docstring": "アクションを現在の状態に適用し、差分を返す。",
+              "nested": []
             }
           ]
         }
@@ -1761,7 +1987,8 @@
               "kind": "method",
               "start_line": 53,
               "end_line": 59,
-              "docstring": "Judge whether ``value`` satisfies this validator's rule."
+              "docstring": "Judge whether ``value`` satisfies this validator's rule.",
+              "nested": []
             }
           ]
         },
@@ -1777,14 +2004,16 @@
               "kind": "method",
               "start_line": 65,
               "end_line": 67,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate",
               "kind": "method",
               "start_line": 69,
               "end_line": 73,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1800,14 +2029,16 @@
               "kind": "method",
               "start_line": 86,
               "end_line": 96,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate",
               "kind": "method",
               "start_line": 98,
               "end_line": 104,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1823,14 +2054,16 @@
               "kind": "method",
               "start_line": 117,
               "end_line": 125,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate",
               "kind": "method",
               "start_line": 127,
               "end_line": 130,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1839,7 +2072,8 @@
           "kind": "function",
           "start_line": 133,
           "end_line": 161,
-          "docstring": "Display ``result``'s failure message via ``QMessageBox.warning``."
+          "docstring": "Display ``result``'s failure message via ``QMessageBox.warning``.",
+          "nested": []
         }
       ]
     },
@@ -1858,21 +2092,24 @@
               "kind": "method",
               "start_line": 257,
               "end_line": 267,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "showEvent",
               "kind": "method",
               "start_line": 269,
               "end_line": 271,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "closeEvent",
               "kind": "method",
               "start_line": 273,
               "end_line": 276,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1888,56 +2125,64 @@
               "kind": "method",
               "start_line": 280,
               "end_line": 308,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "setup_raster",
               "kind": "method",
               "start_line": 310,
               "end_line": 319,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "set_ref_points_data",
               "kind": "method",
               "start_line": 321,
               "end_line": 322,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "add_marker",
               "kind": "method",
               "start_line": 324,
               "end_line": 325,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "clear_markers",
               "kind": "method",
               "start_line": 327,
               "end_line": 328,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "clean_up",
               "kind": "method",
               "start_line": 330,
               "end_line": 337,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "showEvent",
               "kind": "method",
               "start_line": 339,
               "end_line": 341,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "closeEvent",
               "kind": "method",
               "start_line": 343,
               "end_line": 346,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1953,14 +2198,16 @@
               "kind": "method",
               "start_line": 350,
               "end_line": 350,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "valueFromText",
               "kind": "method",
               "start_line": 351,
               "end_line": 353,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -1976,49 +2223,56 @@
               "kind": "method",
               "start_line": 357,
               "end_line": 375,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
               "start_line": 377,
               "end_line": 438,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_populate_initial_values",
               "kind": "method",
               "start_line": 440,
               "end_line": 460,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_y_changed",
               "kind": "method",
               "start_line": 463,
               "end_line": 469,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_validate_and_lookup",
               "kind": "method",
               "start_line": 471,
               "end_line": 484,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_delete_point_clicked",
               "kind": "method",
               "start_line": 486,
               "end_line": 489,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_confirm_clicked",
               "kind": "method",
               "start_line": 491,
               "end_line": 493,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -2034,56 +2288,64 @@
               "kind": "method",
               "start_line": 497,
               "end_line": 515,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
               "start_line": 517,
               "end_line": 554,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_populate_table",
               "kind": "method",
               "start_line": 556,
               "end_line": 575,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_color_button",
               "kind": "method",
               "start_line": 577,
               "end_line": 579,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_pick_color",
               "kind": "method",
               "start_line": 581,
               "end_line": 586,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_table_selection_changed",
               "kind": "method",
               "start_line": 588,
               "end_line": 608,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_realtime_validate",
               "kind": "method",
               "start_line": 610,
               "end_line": 614,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_confirm_clicked",
               "kind": "method",
               "start_line": 616,
               "end_line": 631,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -2091,180 +2353,202 @@
           "name": "PointNameEntryDialog",
           "kind": "class",
           "start_line": 636,
-          "end_line": 709,
+          "end_line": 712,
           "docstring": null,
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
               "start_line": 637,
-              "end_line": 679,
-              "docstring": null
+              "end_line": 682,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_get_point_name_text",
               "kind": "method",
-              "start_line": 681,
-              "end_line": 682,
-              "docstring": null
+              "start_line": 684,
+              "end_line": 685,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_realtime_validate",
               "kind": "method",
-              "start_line": 684,
-              "end_line": 694,
-              "docstring": null
+              "start_line": 687,
+              "end_line": 697,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_ok_clicked",
               "kind": "method",
-              "start_line": 696,
-              "end_line": 706,
-              "docstring": null
+              "start_line": 699,
+              "end_line": 709,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get_values",
               "kind": "method",
-              "start_line": 708,
-              "end_line": 709,
-              "docstring": null
+              "start_line": 711,
+              "end_line": 712,
+              "docstring": null,
+              "nested": []
             }
           ]
         },
         {
           "name": "DisplayFilterDialog",
           "kind": "class",
-          "start_line": 711,
-          "end_line": 805,
+          "start_line": 714,
+          "end_line": 808,
           "docstring": "Modal dialog for configuring display filters (FEAT-05).",
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
-              "start_line": 714,
-              "end_line": 746,
-              "docstring": null
+              "start_line": 717,
+              "end_line": 749,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
-              "start_line": 748,
-              "end_line": 762,
-              "docstring": null
+              "start_line": 751,
+              "end_line": 765,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_clear_all_clicked",
               "kind": "method",
-              "start_line": 764,
-              "end_line": 770,
-              "docstring": null
+              "start_line": 767,
+              "end_line": 773,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_populate_feature_list",
               "kind": "method",
-              "start_line": 772,
-              "end_line": 777,
-              "docstring": null
+              "start_line": 775,
+              "end_line": 780,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "set_feature_names",
               "kind": "method",
-              "start_line": 779,
-              "end_line": 781,
-              "docstring": null
+              "start_line": 782,
+              "end_line": 784,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "set_filters",
               "kind": "method",
-              "start_line": 783,
-              "end_line": 794,
-              "docstring": null
+              "start_line": 786,
+              "end_line": 797,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get_filters",
               "kind": "method",
-              "start_line": 796,
-              "end_line": 805,
-              "docstring": null
+              "start_line": 799,
+              "end_line": 808,
+              "docstring": null,
+              "nested": []
             }
           ]
         },
         {
           "name": "PointEditDialog",
           "kind": "class",
-          "start_line": 808,
-          "end_line": 998,
+          "start_line": 811,
+          "end_line": 1001,
           "docstring": "FEAT-01: Modal dialog for Point Editing",
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
-              "start_line": 810,
-              "end_line": 825,
-              "docstring": null
+              "start_line": 813,
+              "end_line": 828,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
-              "start_line": 827,
-              "end_line": 882,
-              "docstring": null
+              "start_line": 830,
+              "end_line": 885,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_populate_initial_values",
               "kind": "method",
-              "start_line": 884,
-              "end_line": 925,
-              "docstring": null
+              "start_line": 887,
+              "end_line": 928,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_category_changed",
               "kind": "method",
-              "start_line": 927,
-              "end_line": 931,
-              "docstring": null
+              "start_line": 930,
+              "end_line": 934,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_excavation_type_changed",
               "kind": "method",
-              "start_line": 933,
-              "end_line": 936,
-              "docstring": null
+              "start_line": 936,
+              "end_line": 939,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_get_current_point_name",
               "kind": "method",
-              "start_line": 938,
-              "end_line": 942,
-              "docstring": null
+              "start_line": 941,
+              "end_line": 945,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_validate",
               "kind": "method",
-              "start_line": 944,
-              "end_line": 973,
-              "docstring": null
+              "start_line": 947,
+              "end_line": 976,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_delete_clicked",
               "kind": "method",
-              "start_line": 975,
-              "end_line": 979,
-              "docstring": null
+              "start_line": 978,
+              "end_line": 982,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_confirm_delete_clicked",
               "kind": "method",
-              "start_line": 981,
-              "end_line": 983,
-              "docstring": null
+              "start_line": 984,
+              "end_line": 986,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_confirm_clicked",
               "kind": "method",
-              "start_line": 985,
-              "end_line": 998,
-              "docstring": null
+              "start_line": 988,
+              "end_line": 1001,
+              "docstring": null,
+              "nested": []
             }
           ]
         }
@@ -2276,254 +2560,289 @@
         {
           "name": "MainDockWidget",
           "kind": "class",
-          "start_line": 126,
-          "end_line": 897,
+          "start_line": 123,
+          "end_line": 901,
           "docstring": null,
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
-              "start_line": 128,
-              "end_line": 232,
-              "docstring": null
+              "start_line": 125,
+              "end_line": 229,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "preview_canvas",
               "kind": "method",
-              "start_line": 235,
-              "end_line": 236,
-              "docstring": null
+              "start_line": 232,
+              "end_line": 233,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "preview_raster_layer",
               "kind": "method",
-              "start_line": 239,
-              "end_line": 240,
-              "docstring": null
+              "start_line": 236,
+              "end_line": 237,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "georef_tool",
               "kind": "method",
-              "start_line": 243,
-              "end_line": 244,
-              "docstring": null
+              "start_line": 240,
+              "end_line": 241,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_load_icon",
               "kind": "method",
-              "start_line": 246,
-              "end_line": 248,
-              "docstring": null
+              "start_line": 243,
+              "end_line": 245,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
-              "start_line": 250,
-              "end_line": 317,
-              "docstring": null
+              "start_line": 247,
+              "end_line": 314,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_create_tab2_ui",
               "kind": "method",
-              "start_line": 323,
-              "end_line": 398,
-              "docstring": null
+              "start_line": 320,
+              "end_line": 401,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_tab2_comboboxes",
               "kind": "method",
-              "start_line": 400,
-              "end_line": 415,
-              "docstring": null
+              "start_line": 403,
+              "end_line": 418,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_state_changed",
               "kind": "method",
-              "start_line": 421,
-              "end_line": 499,
-              "docstring": null
+              "start_line": 424,
+              "end_line": 503,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_digitizing_inputs_to_state",
               "kind": "method",
-              "start_line": 501,
-              "end_line": 516,
-              "docstring": "Viewのパネル入力状態をStateの inputs に一括反映してバリデーションを発行する"
+              "start_line": 505,
+              "end_line": 517,
+              "docstring": "Viewのパネル入力状態をStateの inputs に一括反映してバリデーションを発行する",
+              "nested": []
             },
             {
               "name": "_on_attribute_category_changed",
               "kind": "method",
-              "start_line": 518,
+              "start_line": 519,
               "end_line": 538,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_excavation_changed",
               "kind": "method",
               "start_line": 540,
-              "end_line": 548,
-              "docstring": null
+              "end_line": 547,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_point_info_status_ui",
               "kind": "method",
-              "start_line": 550,
-              "end_line": 573,
-              "docstring": null
+              "start_line": 549,
+              "end_line": 572,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_canvas_clicked",
               "kind": "method",
-              "start_line": 579,
-              "end_line": 584,
-              "docstring": null
+              "start_line": 578,
+              "end_line": 583,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_handle_release_mode_click",
               "kind": "method",
-              "start_line": 586,
-              "end_line": 609,
-              "docstring": null
+              "start_line": 585,
+              "end_line": 611,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_existing_point_selected",
               "kind": "method",
-              "start_line": 611,
-              "end_line": 642,
-              "docstring": null
+              "start_line": 613,
+              "end_line": 644,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_handle_manage_feature_clicked",
               "kind": "method",
-              "start_line": 644,
-              "end_line": 674,
-              "docstring": null
+              "start_line": 646,
+              "end_line": 676,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_show_display_filter_dialog",
               "kind": "method",
-              "start_line": 676,
-              "end_line": 684,
-              "docstring": null
+              "start_line": 678,
+              "end_line": 686,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_restore_feature_names",
               "kind": "method",
-              "start_line": 686,
-              "end_line": 694,
-              "docstring": null
+              "start_line": 688,
+              "end_line": 696,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_get_drawing_layers",
               "kind": "method",
-              "start_line": 696,
-              "end_line": 706,
-              "docstring": null
+              "start_line": 698,
+              "end_line": 708,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_get_drawing_layer_names",
               "kind": "method",
-              "start_line": 708,
-              "end_line": 709,
-              "docstring": null
+              "start_line": 710,
+              "end_line": 711,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_get_target_drawing_name",
               "kind": "method",
-              "start_line": 711,
-              "end_line": 722,
-              "docstring": null
+              "start_line": 713,
+              "end_line": 724,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_drawing_combo",
               "kind": "method",
-              "start_line": 724,
-              "end_line": 750,
-              "docstring": null
+              "start_line": 726,
+              "end_line": 752,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_ensure_drawing_selected",
               "kind": "method",
-              "start_line": 752,
-              "end_line": 765,
-              "docstring": null
+              "start_line": 754,
+              "end_line": 767,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_drawing_table_selection_changed",
               "kind": "method",
-              "start_line": 767,
-              "end_line": 771,
-              "docstring": null
+              "start_line": 769,
+              "end_line": 773,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_drawing_table_header_clicked",
               "kind": "method",
-              "start_line": 773,
-              "end_line": 795,
-              "docstring": null
+              "start_line": 775,
+              "end_line": 797,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_drawing_table_cell_changed",
               "kind": "method",
-              "start_line": 797,
-              "end_line": 802,
-              "docstring": null
+              "start_line": 799,
+              "end_line": 804,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_show_image_dialog",
               "kind": "method",
-              "start_line": 804,
-              "end_line": 807,
-              "docstring": null
+              "start_line": 806,
+              "end_line": 809,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_show_settings_dialog",
               "kind": "method",
-              "start_line": 809,
-              "end_line": 814,
-              "docstring": null
+              "start_line": 811,
+              "end_line": 816,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_show_output_dialog",
               "kind": "method",
-              "start_line": 816,
-              "end_line": 819,
-              "docstring": null
+              "start_line": 818,
+              "end_line": 821,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_main_map_tool_state",
               "kind": "method",
-              "start_line": 821,
-              "end_line": 833,
-              "docstring": null
+              "start_line": 823,
+              "end_line": 835,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "update_symbology_opacity",
               "kind": "method",
-              "start_line": 835,
-              "end_line": 853,
-              "docstring": null
+              "start_line": 837,
+              "end_line": 857,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_map_tool_focus_state",
               "kind": "method",
-              "start_line": 855,
-              "end_line": 863,
-              "docstring": null
+              "start_line": 859,
+              "end_line": 867,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_save_project",
               "kind": "method",
-              "start_line": 865,
-              "end_line": 870,
-              "docstring": null
+              "start_line": 869,
+              "end_line": 874,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "closeEvent",
               "kind": "method",
-              "start_line": 872,
-              "end_line": 897,
-              "docstring": null
+              "start_line": 876,
+              "end_line": 901,
+              "docstring": null,
+              "nested": []
             }
           ]
         }
@@ -2537,7 +2856,114 @@
           "kind": "function",
           "start_line": 134,
           "end_line": 560,
-          "docstring": "Construct Tab 1: Image Addition & Pre-Georeferencing."
+          "docstring": "Construct Tab 1: Image Addition & Pre-Georeferencing.",
+          "nested": [
+            {
+              "name": "create_tab1_ui._refresh_edit_layer_combo",
+              "kind": "nested function",
+              "start_line": 186,
+              "end_line": 195,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_mode_changed",
+              "kind": "nested function",
+              "start_line": 197,
+              "end_line": 199,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_browse_image_file",
+              "kind": "nested function",
+              "start_line": 201,
+              "end_line": 209,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_edit_layer_changed",
+              "kind": "nested function",
+              "start_line": 211,
+              "end_line": 223,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_rename_layer_clicked",
+              "kind": "nested function",
+              "start_line": 225,
+              "end_line": 250,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_delete_layer_clicked",
+              "kind": "nested function",
+              "start_line": 252,
+              "end_line": 280,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_confirm_image_clicked",
+              "kind": "nested function",
+              "start_line": 282,
+              "end_line": 319,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_preview_canvas_point_clicked",
+              "kind": "nested function",
+              "start_line": 321,
+              "end_line": 356,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_ref_table_cell_changed",
+              "kind": "nested function",
+              "start_line": 358,
+              "end_line": 385,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_transform_clicked",
+              "kind": "nested function",
+              "start_line": 387,
+              "end_line": 404,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_export_layer_clicked",
+              "kind": "nested function",
+              "start_line": 406,
+              "end_line": 429,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._refresh_ref_points_table_and_markers",
+              "kind": "nested function",
+              "start_line": 446,
+              "end_line": 471,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._refresh_ref_points_table_and_markers._build_row",
+              "kind": "nested function",
+              "start_line": 453,
+              "end_line": 468,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._update_ref_points_status",
+              "kind": "nested function",
+              "start_line": 473,
+              "end_line": 503,
+              "docstring": null
+            },
+            {
+              "name": "create_tab1_ui._on_state_changed",
+              "kind": "nested function",
+              "start_line": 505,
+              "end_line": 556,
+              "docstring": null
+            }
+          ]
         }
       ]
     },
@@ -2549,7 +2975,30 @@
           "kind": "function",
           "start_line": 68,
           "end_line": 170,
-          "docstring": "Tab 4 (出力) のUIを構築し、シグナルとアクションのバインディングを行う。"
+          "docstring": "Tab 4 (出力) のUIを構築し、シグナルとアクションのバインディングを行う。",
+          "nested": [
+            {
+              "name": "create_tab4_ui._on_browse_csv",
+              "kind": "nested function",
+              "start_line": 110,
+              "end_line": 120,
+              "docstring": null
+            },
+            {
+              "name": "create_tab4_ui._on_state_changed",
+              "kind": "nested function",
+              "start_line": 128,
+              "end_line": 146,
+              "docstring": "UIStateStoreの変更を検知し、Tab4のUIを安全に同期する"
+            },
+            {
+              "name": "create_tab4_ui.show_message_bar",
+              "kind": "nested function",
+              "start_line": 154,
+              "end_line": 156,
+              "docstring": null
+            }
+          ]
         }
       ]
     },
@@ -2561,7 +3010,37 @@
           "kind": "function",
           "start_line": 166,
           "end_line": 297,
-          "docstring": "Tab 3 (環境設定) のUIを構築し、シグナルとアクションのバインディングを行う。"
+          "docstring": "Tab 3 (環境設定) のUIを構築し、シグナルとアクションのバインディングを行う。",
+          "nested": [
+            {
+              "name": "create_tab3_ui._open_color_dialog",
+              "kind": "nested function",
+              "start_line": 204,
+              "end_line": 211,
+              "docstring": "GUIダイアログ (QColorDialog) の表示を View 層で完結させる"
+            },
+            {
+              "name": "create_tab3_ui._set_panel_value",
+              "kind": "nested function",
+              "start_line": 213,
+              "end_line": 220,
+              "docstring": "ControllerからのUI更新要求を、シグナルループを防止して安全に適用する"
+            },
+            {
+              "name": "create_tab3_ui._set_widget_enabled",
+              "kind": "nested function",
+              "start_line": 222,
+              "end_line": 225,
+              "docstring": "ControllerからのUI有効/無効の切り替え要求を適用する"
+            },
+            {
+              "name": "create_tab3_ui._on_apply_clicked",
+              "kind": "nested function",
+              "start_line": 245,
+              "end_line": 268,
+              "docstring": null
+            }
+          ]
         }
       ]
     },
@@ -2604,28 +3083,32 @@
               "kind": "method",
               "start_line": 122,
               "end_line": 128,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "textFromValue",
               "kind": "method",
               "start_line": 130,
               "end_line": 131,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "valueFromText",
               "kind": "method",
               "start_line": 133,
               "end_line": 136,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate",
               "kind": "method",
               "start_line": 138,
               "end_line": 139,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         },
@@ -2641,84 +3124,96 @@
               "kind": "method",
               "start_line": 145,
               "end_line": 185,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_init_ui",
               "kind": "method",
               "start_line": 187,
               "end_line": 349,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_session_type_changed",
               "kind": "method",
               "start_line": 351,
               "end_line": 352,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_apply_grid_mode_state",
               "kind": "method",
               "start_line": 354,
               "end_line": 404,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_grid_coordinate_preview",
               "kind": "method",
               "start_line": 406,
               "end_line": 434,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_grid_inputs_changed",
               "kind": "method",
               "start_line": 436,
               "end_line": 438,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_refresh_grid_status_panel",
               "kind": "method",
               "start_line": 440,
               "end_line": 464,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_show_grid_warning",
               "kind": "method",
               "start_line": 466,
               "end_line": 468,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_on_grid_warning_confirm_clicked",
               "kind": "method",
               "start_line": 470,
               "end_line": 477,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_update_ok_button_state",
               "kind": "method",
               "start_line": 479,
               "end_line": 481,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "_validate_and_accept",
               "kind": "method",
               "start_line": 483,
               "end_line": 485,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "get_session_data",
               "kind": "method",
               "start_line": 487,
               "end_line": 537,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         }
@@ -2739,182 +3234,208 @@
               "kind": "method",
               "start_line": 36,
               "end_line": 346,
-              "docstring": "Generate a theme-agnostic QSS stylesheet referencing Qt palette roles."
+              "docstring": "Generate a theme-agnostic QSS stylesheet referencing Qt palette roles.",
+              "nested": []
             },
             {
               "name": "show_error_dialog",
               "kind": "method",
               "start_line": 349,
               "end_line": 359,
-              "docstring": "Thin wrapper around QMessageBox.critical() to consolidate error dialog presentation."
+              "docstring": "Thin wrapper around QMessageBox.critical() to consolidate error dialog presentation.",
+              "nested": []
             },
             {
               "name": "show_warning_dialog",
               "kind": "method",
               "start_line": 362,
               "end_line": 372,
-              "docstring": "Thin wrapper around QMessageBox.warning() to consolidate warning dialog presentation."
+              "docstring": "Thin wrapper around QMessageBox.warning() to consolidate warning dialog presentation.",
+              "nested": []
             },
             {
               "name": "apply_theme",
               "kind": "method",
               "start_line": 375,
               "end_line": 382,
-              "docstring": "Apply theme-agnostic styling to the target widget and polish its hierarchy."
+              "docstring": "Apply theme-agnostic styling to the target widget and polish its hierarchy.",
+              "nested": []
             },
             {
               "name": "create_spinbox",
               "kind": "method",
               "start_line": 385,
               "end_line": 407,
-              "docstring": "Factory method to create a standardized QSpinBox with native controls."
+              "docstring": "Factory method to create a standardized QSpinBox with native controls.",
+              "nested": []
             },
             {
               "name": "create_status_panel",
               "kind": "method",
               "start_line": 410,
               "end_line": 439,
-              "docstring": "Create a flat-design status container panel with a color-coded left border."
+              "docstring": "Create a flat-design status container panel with a color-coded left border.",
+              "nested": []
             },
             {
               "name": "update_status_panel",
               "kind": "method",
               "start_line": 442,
               "end_line": 462,
-              "docstring": "Update text and border status style for an existing status panel container."
+              "docstring": "Update text and border status style for an existing status panel container.",
+              "nested": []
             },
             {
               "name": "set_primary_button",
               "kind": "method",
               "start_line": 465,
               "end_line": 468,
-              "docstring": "Mark a QPushButton as a primary action button."
+              "docstring": "Mark a QPushButton as a primary action button.",
+              "nested": []
             },
             {
               "name": "set_success_button",
               "kind": "method",
               "start_line": 471,
               "end_line": 474,
-              "docstring": "Mark a QPushButton as a success/save action button."
+              "docstring": "Mark a QPushButton as a success/save action button.",
+              "nested": []
             },
             {
               "name": "set_accent_button",
               "kind": "method",
               "start_line": 477,
               "end_line": 480,
-              "docstring": "Mark a QPushButton as an accent/export action button."
+              "docstring": "Mark a QPushButton as an accent/export action button.",
+              "nested": []
             },
             {
               "name": "set_banner_status",
               "kind": "method",
               "start_line": 483,
               "end_line": 491,
-              "docstring": "Set dynamic status property on a banner QLabel ('info', 'success', 'warning')."
+              "docstring": "Set dynamic status property on a banner QLabel ('info', 'success', 'warning').",
+              "nested": []
             },
             {
               "name": "set_status_panel",
               "kind": "method",
               "start_line": 494,
               "end_line": 497,
-              "docstring": "Mark a QFrame as a status panel."
+              "docstring": "Mark a QFrame as a status panel.",
+              "nested": []
             },
             {
               "name": "set_error_border",
               "kind": "method",
               "start_line": 500,
               "end_line": 513,
-              "docstring": "Apply/remove a red error-highlight border on an input widget (T-0033)."
+              "docstring": "Apply/remove a red error-highlight border on an input widget (T-0033).",
+              "nested": []
             },
             {
               "name": "build_separator",
               "kind": "method",
               "start_line": 516,
               "end_line": 548,
-              "docstring": "Build a flexible separator widget with optional bold title header."
+              "docstring": "Build a flexible separator widget with optional bold title header.",
+              "nested": []
             },
             {
               "name": "set_nav_button",
               "kind": "method",
               "start_line": 552,
               "end_line": 559,
-              "docstring": "Mark a checkable QToolButton as a left icon-rail navigation button."
+              "docstring": "Mark a checkable QToolButton as a left icon-rail navigation button.",
+              "nested": []
             },
             {
               "name": "build_flex_row",
               "kind": "method",
               "start_line": 562,
               "end_line": 606,
-              "docstring": "Build a standardized flexbox-style horizontal row widget with a main label and element container."
+              "docstring": "Build a standardized flexbox-style horizontal row widget with a main label and element container.",
+              "nested": []
             },
             {
               "name": "build_child_container",
               "kind": "method",
               "start_line": 609,
               "end_line": 631,
-              "docstring": "Build a sub-container pairing a sub-label with an input widget."
+              "docstring": "Build a sub-container pairing a sub-label with an input widget.",
+              "nested": []
             },
             {
               "name": "build_form_row",
               "kind": "method",
               "start_line": 634,
               "end_line": 673,
-              "docstring": "Build a labeled form row pairing a plain-text label with a single input widget."
+              "docstring": "Build a labeled form row pairing a plain-text label with a single input widget.",
+              "nested": []
             },
             {
               "name": "build_section_header",
               "kind": "method",
               "start_line": 676,
               "end_line": 688,
-              "docstring": "Build a bold section header QLabel used to visually separate settings groups."
+              "docstring": "Build a bold section header QLabel used to visually separate settings groups.",
+              "nested": []
             },
             {
               "name": "repopulate_combo_box",
               "kind": "method",
               "start_line": 691,
               "end_line": 724,
-              "docstring": "Clear and repopulate a QComboBox with a list of string items while blocking signals."
+              "docstring": "Clear and repopulate a QComboBox with a list of string items while blocking signals.",
+              "nested": []
             },
             {
               "name": "repopulate_checkable_list",
               "kind": "method",
               "start_line": 727,
               "end_line": 746,
-              "docstring": "Clear and repopulate a QListWidget with checkable items while blocking signals."
+              "docstring": "Clear and repopulate a QListWidget with checkable items while blocking signals.",
+              "nested": []
             },
             {
               "name": "get_checkable_item_state",
               "kind": "method",
               "start_line": 749,
               "end_line": 760,
-              "docstring": "Extract (user_data, is_checked) from a checkable QListWidgetItem."
+              "docstring": "Extract (user_data, is_checked) from a checkable QListWidgetItem.",
+              "nested": []
             },
             {
               "name": "rebuild_table_rows",
               "kind": "method",
               "start_line": 763,
               "end_line": 789,
-              "docstring": "Clear and rebuild a QTableWidget's rows from a data source while blocking signals."
+              "docstring": "Clear and rebuild a QTableWidget's rows from a data source while blocking signals.",
+              "nested": []
             },
             {
               "name": "populate_combo_from_layer_field",
               "kind": "method",
               "start_line": 792,
               "end_line": 831,
-              "docstring": "Populate a QComboBox with unique sorted string values extracted from a vector layer field."
+              "docstring": "Populate a QComboBox with unique sorted string values extracted from a vector layer field.",
+              "nested": []
             },
             {
               "name": "build_centered_button_row",
               "kind": "method",
               "start_line": 834,
               "end_line": 862,
-              "docstring": "Build a centered, equal-width row layout for dialog action buttons."
+              "docstring": "Build a centered, equal-width row layout for dialog action buttons.",
+              "nested": []
             },
             {
               "name": "build_segmented_toggle",
               "kind": "method",
               "start_line": 865,
               "end_line": 906,
-              "docstring": "Build an iOS-style segmented toggle button group."
+              "docstring": "Build an iOS-style segmented toggle button group.",
+              "nested": []
             }
           ]
         }
@@ -2939,14 +3460,16 @@
               "kind": "method",
               "start_line": 20,
               "end_line": 23,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate_and_lookup",
               "kind": "method",
               "start_line": 25,
               "end_line": 49,
-              "docstring": "グリッド座標をLayerManagerのキャッシュに照会して検証・実座標変換する"
+              "docstring": "グリッド座標をLayerManagerのキャッシュに照会して検証・実座標変換する",
+              "nested": []
             }
           ]
         },
@@ -2962,14 +3485,16 @@
               "kind": "method",
               "start_line": 53,
               "end_line": 59,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate_inputs",
               "kind": "method",
               "start_line": 61,
               "end_line": 79,
-              "docstring": "SP属性の必須チェックと、全属性に対する重複チェックを行う"
+              "docstring": "SP属性の必須チェックと、全属性に対する重複チェックを行う",
+              "nested": []
             }
           ]
         },
@@ -2985,14 +3510,16 @@
               "kind": "method",
               "start_line": 83,
               "end_line": 85,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate_feature_name",
               "kind": "method",
               "start_line": 87,
               "end_line": 102,
-              "docstring": "遺構名の入力検証と重複チェックを行う"
+              "docstring": "遺構名の入力検証と重複チェックを行う",
+              "nested": []
             }
           ]
         },
@@ -3008,14 +3535,16 @@
               "kind": "method",
               "start_line": 106,
               "end_line": 108,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate_inputs",
               "kind": "method",
               "start_line": 110,
               "end_line": 146,
-              "docstring": "点情報編集の入力検証と重複チェックを行う"
+              "docstring": "点情報編集の入力検証と重複チェックを行う",
+              "nested": []
             }
           ]
         }
@@ -3028,120 +3557,144 @@
           "name": "DigitizingLogic",
           "kind": "class",
           "start_line": 32,
-          "end_line": 417,
+          "end_line": 451,
           "docstring": "点群の打刻、自動採番、重複判定、編集・削除を処理するドメインロジック。",
           "methods": [
             {
               "name": "__init__",
               "kind": "method",
               "start_line": 38,
-              "end_line": 76,
-              "docstring": "Args:"
+              "end_line": 73,
+              "docstring": "Args:",
+              "nested": []
             },
             {
               "name": "bind_view_callbacks",
               "kind": "method",
-              "start_line": 78,
-              "end_line": 84,
-              "docstring": "View側のUI更新/再描画コールバックをDI（依存性注入）する。"
+              "start_line": 79,
+              "end_line": 85,
+              "docstring": "View側のUI更新/再描画コールバックをDI（依存性注入）する。",
+              "nested": []
             },
             {
               "name": "busy_interaction_guard",
               "kind": "method",
-              "start_line": 87,
-              "end_line": 93,
-              "docstring": "局所ガード（連続打刻など、Dispatcherの大域ロックを利用しつつ即時復帰する処理用）"
+              "start_line": 88,
+              "end_line": 94,
+              "docstring": "局所ガード（連続打刻など、Dispatcherの大域ロックを利用しつつ即時復帰する処理用）",
+              "nested": []
             },
             {
               "name": "is_feature_name_missing",
               "kind": "method",
-              "start_line": 98,
-              "end_line": 103,
-              "docstring": "遺構モードにおいて、遺構名が未指定かどうかを判定する"
+              "start_line": 99,
+              "end_line": 104,
+              "docstring": "遺構モードにおいて、遺構名が未指定かどうかを判定する",
+              "nested": []
             },
             {
               "name": "calculate_next_point_number",
               "kind": "method",
-              "start_line": 105,
+              "start_line": 106,
               "end_line": 115,
-              "docstring": "現在のカテゴリに基づいて自動採番された次の点名を返す。"
+              "docstring": "現在のカテゴリに基づいて自動採番された次の点名を返す。",
+              "nested": []
             },
             {
               "name": "get_last_created_point_name",
               "kind": "method",
               "start_line": 117,
               "end_line": 141,
-              "docstring": "指定カテゴリで最後に作成された点名を取得する（手動入力補完用）"
+              "docstring": "指定カテゴリで最後に作成された点名を取得する（手動入力補完用）",
+              "nested": []
             },
             {
               "name": "validate_drawing_bounds",
               "kind": "method",
               "start_line": 143,
               "end_line": 179,
-              "docstring": "打刻点が対象図面のピクセル範囲内に収まっているかを判定する"
+              "docstring": "打刻点が対象図面のピクセル範囲内に収まっているかを判定する",
+              "nested": []
             },
             {
               "name": "check_realtime_duplicate",
               "kind": "method",
               "start_line": 181,
               "end_line": 196,
-              "docstring": "全図面を対象に点名の重複をチェックし、エラー識別子を返す [RULE-DOMAIN-06]"
+              "docstring": "全図面を対象に点名の重複をチェックし、エラー識別子を返す [RULE-DOMAIN-06]",
+              "nested": []
             },
             {
               "name": "handle_validate_inputs",
               "kind": "method",
               "start_line": 202,
-              "end_line": 247,
-              "docstring": "UIの入力状態のリアルタイムバリデーションと同期を処理する"
+              "end_line": 238,
+              "docstring": "UIの入力状態のリアルタイムバリデーションと同期を処理する",
+              "nested": []
+            },
+            {
+              "name": "run_validation",
+              "kind": "method",
+              "start_line": 240,
+              "end_line": 255,
+              "docstring": "リアルタイムバリデーションをEventDispatcherを経由せずに直接実行する。",
+              "nested": []
             },
             {
               "name": "handle_canvas_click",
               "kind": "method",
-              "start_line": 249,
-              "end_line": 276,
-              "docstring": "キャンバスがクリックされた時の自動打刻処理"
+              "start_line": 257,
+              "end_line": 284,
+              "docstring": "キャンバスがクリックされた時の自動打刻処理",
+              "nested": []
             },
             {
               "name": "handle_add_manual_point",
               "kind": "method",
-              "start_line": 278,
-              "end_line": 289,
-              "docstring": "解除モード等で手動入力された打刻点の作成処理"
+              "start_line": 286,
+              "end_line": 297,
+              "docstring": "解除モード等で手動入力された打刻点の作成処理",
+              "nested": []
             },
             {
               "name": "apply_next_point_number",
               "kind": "method",
-              "start_line": 291,
-              "end_line": 304,
-              "docstring": "現在のカテゴリに基づき最新の連番（最新point_idのpoint_name+1）を計算してActionを返す"
+              "start_line": 299,
+              "end_line": 312,
+              "docstring": "現在のカテゴリに基づき最新の連番（最新point_idのpoint_name+1）を計算してActionを返す",
+              "nested": []
             },
             {
               "name": "_create_point",
               "kind": "method",
-              "start_line": 306,
-              "end_line": 345,
-              "docstring": "新規点を生成してレイヤに書き込む共通内部メソッド"
+              "start_line": 314,
+              "end_line": 359,
+              "docstring": "新規点を生成してレイヤに書き込む共通内部メソッド",
+              "nested": []
             },
             {
               "name": "handle_delete_point",
               "kind": "method",
-              "start_line": 347,
-              "end_line": 362,
-              "docstring": "指定されたIDの点を削除する"
+              "start_line": 361,
+              "end_line": 376,
+              "docstring": "指定されたIDの点を削除する",
+              "nested": []
             },
             {
               "name": "handle_update_attributes",
               "kind": "method",
-              "start_line": 364,
-              "end_line": 382,
-              "docstring": "既存点の属性を更新する [RULE-PERSIST-05]"
+              "start_line": 378,
+              "end_line": 416,
+              "docstring": "既存点の属性を更新する [RULE-PERSIST-05]",
+              "nested": []
             },
             {
               "name": "handle_update_feature_category",
               "kind": "method",
-              "start_line": 384,
-              "end_line": 417,
-              "docstring": "遺構名とカラーを一括更新する"
+              "start_line": 418,
+              "end_line": 451,
+              "docstring": "遺構名とカラーを一括更新する",
+              "nested": []
             }
           ]
         }
@@ -3162,21 +3715,24 @@
               "kind": "method",
               "start_line": 26,
               "end_line": 33,
-              "docstring": "Args:"
+              "docstring": "Args:",
+              "nested": []
             },
             {
               "name": "register_handler",
               "kind": "method",
               "start_line": 35,
               "end_line": 52,
-              "docstring": "特定の UIAction に対するハンドラと前置バリデーターを登録する。"
+              "docstring": "特定の UIAction に対するハンドラと前置バリデーターを登録する。",
+              "nested": []
             },
             {
               "name": "dispatch",
               "kind": "method",
               "start_line": 54,
               "end_line": 111,
-              "docstring": "アクションをディスパッチし、パイプライン処理を実行する。"
+              "docstring": "アクションをディスパッチし、パイプライン処理を実行する。",
+              "nested": []
             }
           ]
         }
@@ -3197,21 +3753,24 @@
               "kind": "method",
               "start_line": 27,
               "end_line": 53,
-              "docstring": "Args:"
+              "docstring": "Args:",
+              "nested": []
             },
             {
               "name": "handle_ref_point_visibility",
               "kind": "method",
               "start_line": 59,
               "end_line": 80,
-              "docstring": "基準点レイヤの表示/非表示を切り替えるアクションハンドラ。"
+              "docstring": "基準点レイヤの表示/非表示を切り替えるアクションハンドラ。",
+              "nested": []
             },
             {
               "name": "handle_drawing_visibility",
               "kind": "method",
               "start_line": 82,
               "end_line": 97,
-              "docstring": "図面選択テーブルのチェックボックス操作に伴い、"
+              "docstring": "図面選択テーブルのチェックボックス操作に伴い、",
+              "nested": []
             }
           ]
         }
@@ -3256,7 +3815,7 @@
           "name": "GeorefLogic",
           "kind": "class",
           "start_line": 51,
-          "end_line": 345,
+          "end_line": 351,
           "docstring": "画像管理・幾何補正（ジオリファレンス）の純粋なビジネスロジックを担うクラス。",
           "methods": [
             {
@@ -3264,112 +3823,128 @@
               "kind": "method",
               "start_line": 58,
               "end_line": 82,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "bind_view_callbacks",
               "kind": "method",
               "start_line": 84,
               "end_line": 91,
-              "docstring": "View層で解決されるべき操作を注入する"
+              "docstring": "View層で解決されるべき操作を注入する",
+              "nested": []
             },
             {
               "name": "set_modifying_layer",
               "kind": "method",
               "start_line": 97,
               "end_line": 98,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "is_modifying_layer",
               "kind": "method",
               "start_line": 100,
               "end_line": 101,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "convert_to_math_coords",
               "kind": "method",
               "start_line": 103,
               "end_line": 105,
-              "docstring": "測量座標から数学座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])"
+              "docstring": "測量座標から数学座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])",
+              "nested": []
             },
             {
               "name": "convert_to_survey_coords",
               "kind": "method",
               "start_line": 107,
               "end_line": 109,
-              "docstring": "数学座標から測量座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])"
+              "docstring": "数学座標から測量座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])",
+              "nested": []
             },
             {
               "name": "get_residuals_summary",
               "kind": "method",
               "start_line": 111,
               "end_line": 112,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "check_layer_has_points",
               "kind": "method",
               "start_line": 114,
               "end_line": 120,
-              "docstring": "指定レイヤに属する打刻点が存在するかどうかを返す"
+              "docstring": "指定レイヤに属する打刻点が存在するかどうかを返す",
+              "nested": []
             },
             {
               "name": "load_edit_layer_metadata",
               "kind": "method",
               "start_line": 122,
               "end_line": 159,
-              "docstring": "編集対象レイヤのメタデータをロードし、整合性を担保して返す"
+              "docstring": "編集対象レイヤのメタデータをロードし、整合性を担保して返す",
+              "nested": []
             },
             {
               "name": "show_preview_if_needed",
               "kind": "method",
               "start_line": 161,
               "end_line": 178,
-              "docstring": "UIStateのパスに基づいてプレビューキャンバスを準備・表示する"
+              "docstring": "UIStateのパスに基づいてプレビューキャンバスを準備・表示する",
+              "nested": []
             },
             {
               "name": "_create_preview_canvas",
               "kind": "method",
               "start_line": 180,
-              "end_line": 193,
-              "docstring": null
+              "end_line": 199,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "find_snapped_ref_point",
               "kind": "method",
-              "start_line": 195,
-              "end_line": 225,
-              "docstring": "プレビューキャンバス上でのクリック座標から、スナップ対象となる既存の基準点インデックスを返す"
+              "start_line": 201,
+              "end_line": 231,
+              "docstring": "プレビューキャンバス上でのクリック座標から、スナップ対象となる既存の基準点インデックスを返す",
+              "nested": []
             },
             {
               "name": "handle_delete_layer",
               "kind": "method",
-              "start_line": 231,
-              "end_line": 266,
-              "docstring": null
+              "start_line": 237,
+              "end_line": 272,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "handle_rename_layer",
               "kind": "method",
-              "start_line": 268,
-              "end_line": 292,
-              "docstring": null
+              "start_line": 274,
+              "end_line": 298,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "handle_execute_transform",
               "kind": "method",
-              "start_line": 294,
-              "end_line": 303,
-              "docstring": null
+              "start_line": 300,
+              "end_line": 309,
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "handle_export_layer",
               "kind": "method",
-              "start_line": 305,
-              "end_line": 345,
-              "docstring": null
+              "start_line": 311,
+              "end_line": 351,
+              "docstring": null,
+              "nested": []
             }
           ]
         }
@@ -3398,28 +3973,32 @@
               "kind": "method",
               "start_line": 28,
               "end_line": 48,
-              "docstring": "Args:"
+              "docstring": "Args:",
+              "nested": []
             },
             {
               "name": "bind_view_callbacks",
               "kind": "method",
               "start_line": 50,
               "end_line": 52,
-              "docstring": "View層からメッセージバー操作などのコールバックを受け取る"
+              "docstring": "View層からメッセージバー操作などのコールバックを受け取る",
+              "nested": []
             },
             {
               "name": "register_handlers",
               "kind": "method",
               "start_line": 54,
               "end_line": 68,
-              "docstring": "EventDispatcher に対し、自身が担当する Action のハンドラと前置バリデーションを登録する"
+              "docstring": "EventDispatcher に対し、自身が担当する Action のハンドラと前置バリデーションを登録する",
+              "nested": []
             },
             {
               "name": "_handle_export_csv",
               "kind": "method",
               "start_line": 74,
               "end_line": 100,
-              "docstring": "ExportCsvAction の処理を行うハンドラ。"
+              "docstring": "ExportCsvAction の処理を行うハンドラ。",
+              "nested": []
             }
           ]
         }
@@ -3464,49 +4043,56 @@
               "kind": "method",
               "start_line": 46,
               "end_line": 59,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "bind_view_callbacks",
               "kind": "method",
               "start_line": 61,
               "end_line": 67,
-              "docstring": "View層から必要な情報取得メソッドやGUI操作ヘルパーをバインドする"
+              "docstring": "View層から必要な情報取得メソッドやGUI操作ヘルパーをバインドする",
+              "nested": []
             },
             {
               "name": "register_handlers",
               "kind": "method",
               "start_line": 69,
               "end_line": 73,
-              "docstring": "EventDispatcher に対し、自身が担当する Action のハンドラを登録する"
+              "docstring": "EventDispatcher に対し、自身が担当する Action のハンドラを登録する",
+              "nested": []
             },
             {
               "name": "_handle_pick_color",
               "kind": "method",
               "start_line": 79,
               "end_line": 84,
-              "docstring": "カラーピッカーを起動し、選択された色をViewにセットする"
+              "docstring": "カラーピッカーを起動し、選択された色をViewにセットする",
+              "nested": []
             },
             {
               "name": "_handle_scale_mode_changed",
               "kind": "method",
               "start_line": 86,
               "end_line": 90,
-              "docstring": "スケールの有効/無効状態をViewに連動させる"
+              "docstring": "スケールの有効/無効状態をViewに連動させる",
+              "nested": []
             },
             {
               "name": "_handle_apply_settings",
               "kind": "method",
               "start_line": 92,
               "end_line": 131,
-              "docstring": "UIから取得した設定値(PluginSettings DTO)を永続化し、シンボロジを一括更新する"
+              "docstring": "UIから取得した設定値(PluginSettings DTO)を永続化し、シンボロジを一括更新する",
+              "nested": []
             },
             {
               "name": "load_initial_settings",
               "kind": "method",
               "start_line": 137,
               "end_line": 177,
-              "docstring": "起動時やダイアログ表示時に、永続化された設定データを読み込みUIコンポーネントへ反映する。"
+              "docstring": "起動時やダイアログ表示時に、永続化された設定データを読み込みUIコンポーネントへ反映する。",
+              "nested": []
             }
           ]
         }
@@ -3535,63 +4121,72 @@
               "kind": "method",
               "start_line": 55,
               "end_line": 76,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "bind_ui",
               "kind": "method",
               "start_line": 78,
               "end_line": 95,
-              "docstring": "View層のUIコンポーネントとコールバックをバインドする"
+              "docstring": "View層のUIコンポーネントとコールバックをバインドする",
+              "nested": []
             },
             {
               "name": "handle_session_type_changed",
               "kind": "method",
               "start_line": 101,
               "end_line": 118,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "handle_browse_folder",
               "kind": "method",
               "start_line": 120,
               "end_line": 134,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "handle_browse_grid_csv",
               "kind": "method",
               "start_line": 136,
               "end_line": 153,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "extract_csv_metadata",
               "kind": "method",
               "start_line": 159,
               "end_line": 235,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "is_range_invalid",
               "kind": "method",
               "start_line": 237,
               "end_line": 243,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "compute_expected_row_count",
               "kind": "method",
               "start_line": 245,
               "end_line": 255,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             },
             {
               "name": "validate_inputs",
               "kind": "method",
               "start_line": 257,
               "end_line": 296,
-              "docstring": null
+              "docstring": null,
+              "nested": []
             }
           ]
         }
