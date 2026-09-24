@@ -6,57 +6,34 @@
 
 import csv
 import math
-from typing import Optional, Tuple, Dict, Any, List, Callable
+from typing import Tuple, Dict, List
 
 import numpy as np
 from scipy.optimize import least_squares
 
-from qgis.core import (
-    QgsVectorLayer,
-    QgsFeature,
-    QgsProject,
-    QgsGeometry,
-    QgsPointXY,
-    Qgis,
-)
-from qgis.PyQt.QtCore import QVariant
-from qgis.PyQt.QtWidgets import QWidget
+from qgis.core import QgsVectorLayer
 
-from .core import (
-    to_survey_coords,
-    from_survey_coords,
-    update_point_layer_geometry,
-    evaluate_residuals,
-    batch_update_attributes,
-)
-from ..ui.style import UIStyleHelper
+from .core import to_survey_coords
+
+
+# 座標変換パラメータの算出失敗を呼び出し側へ通知する例外(メッセージはユーザー向け日本語文)。
+class TransformError(Exception):
+    """Raised when coordinate transformation parameters cannot be computed."""
 
 
 class CoordinateTransformer:
     """Performs 2-point Helmert or N-point non-shear Affine transformation in standard mathematical coordinates
-    (math_x=East, math_y=North), computes residuals in survey coordinates,
-    and updates digitized point features.
+    (math_x=East, math_y=North).
     """
 
-    def __init__(self, point_layer: QgsVectorLayer, ref_point_layer: QgsVectorLayer) -> None:
-        """Initialize CoordinateTransformer.
-
-        :param point_layer: Vector layer for digitized points (points table).
-        :type point_layer: QgsVectorLayer
-        :param ref_point_layer: Vector layer for reference points (ref_points table).
-        :type ref_point_layer: QgsVectorLayer
-        """
-        self.point_layer = point_layer
-        self.ref_point_layer = ref_point_layer
-
     @staticmethod
+    # 2点対応から標準数学座標系での2点ヘルマート(相似)変換パラメータa/b/Tx/Tyを算出。
     def compute_helmert_2p(
         p1: Tuple[float, float],
         p2: Tuple[float, float],
         P1: Tuple[float, float],
         P2: Tuple[float, float],
-        parent: Optional[QWidget] = None,
-    ) -> Optional[Dict[str, float]]:
+    ) -> Dict[str, float]:
         """Compute 2-point Helmert (similarity) transformation parameters in standard mathematical coordinates.
 
         Canvas X = a * x - b * y + Tx  (East-West)
@@ -66,9 +43,9 @@ class CoordinateTransformer:
         :param p2: Local canvas/pixel coordinate (x2, y2) of reference point 2.
         :param P1: Target mathematical coordinate (math_x1, math_y1) of reference point 1.
         :param P2: Target mathematical coordinate (math_x2, math_y2) of reference point 2.
-        :param parent: Optional parent QWidget for error message dialogs.
-        :return: Parameter dictionary {'a': a, 'b': b, 'Tx': Tx, 'Ty': Ty} or None on error.
-        :rtype: Optional[Dict[str, float]]
+        :return: Parameter dictionary {'a': a, 'b': b, 'Tx': Tx, 'Ty': Ty}.
+        :rtype: Dict[str, float]
+        :raises TransformError: If the points are degenerate (same drawing point or same real coordinate).
         """
         x1, y1 = p1[0], -p1[1]
         x2, y2 = p2[0], -p2[1]
@@ -82,24 +59,16 @@ class CoordinateTransformer:
 
         L2 = dx * dx + dy * dy
         if L2 < 1e-9:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent,
-                    "計算エラー",
-                    "図面上の基準点1と基準点2が同一点であるため、ヘルマート変換パラメータを計算できません。\n異なる基準点を指定してください。",
-                )
-            return None
+            raise TransformError(
+                "図面上の基準点1と基準点2が同一点であるため、ヘルマート変換パラメータを計算できません。\n異なる基準点を指定してください。"
+            )
 
         # Check real coordinates distance
         real_L2 = dX * dX + dY * dY
         if real_L2 < 1e-9:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent,
-                    "計算エラー",
-                    "入力された基準点1と基準点2の実座標が同一位置です。\n有効な基準点実座標を入力してください。",
-                )
-            return None
+            raise TransformError(
+                "入力された基準点1と基準点2の実座標が同一位置です。\n有効な基準点実座標を入力してください。"
+            )
 
         a = (dx * dX + dy * dY) / L2
         b = (dx * dY - dy * dX) / L2
@@ -109,6 +78,7 @@ class CoordinateTransformer:
         return {"a": a, "b": b, "Tx": Tx, "Ty": Ty}
 
     @staticmethod
+    # ヘルマート変換パラメータを局所座標(x, y)に適用し、標準数学座標系の座標へ変換。
     def apply_helmert(x: float, y: float, params: Dict[str, float]) -> Tuple[float, float]:
         """Apply Helmert transformation formula to a local coordinate in standard mathematical system."""
         a = params["a"]
@@ -120,6 +90,7 @@ class CoordinateTransformer:
         return X, Y
 
     @staticmethod
+    # アフィン変換パラメータ(A〜F)を局所座標(x, y)に適用し、標準数学座標系の座標へ変換。
     def apply_affine(
         x: float, y: float, params: Tuple[float, float, float, float, float, float]
     ) -> Tuple[float, float]:
@@ -130,12 +101,12 @@ class CoordinateTransformer:
         return X, Y
 
     @classmethod
+    # 2点以上の対応点から、2点ならヘルマート、3点以上なら最小二乗法で非せん断アフィン変換パラメータを算出。
     def compute_affine_points(
         cls,
         local_points: List[Tuple[float, float]],
         real_points: List[Tuple[float, float]],
-        parent: Optional[QWidget] = None,
-    ) -> Optional[Tuple[float, float, float, float, float, float]]:
+    ) -> Tuple[float, float, float, float, float, float]:
         """Compute Affine / Helmert transformation parameters (A, B, C, D, E, F)
         from 2, 3, or 4+ point correspondences in standard mathematical coordinates.
 
@@ -144,22 +115,18 @@ class CoordinateTransformer:
 
         :param local_points: List of (x, y) pixel/local coordinates.
         :param real_points: List of target mathematical coordinates (math_x, math_y) = (East, North).
-        :param parent: Optional parent QWidget for dialogs.
-        :return: (A, B, C, D, E, F) or None on failure.
+        :return: (A, B, C, D, E, F).
+        :raises TransformError: If the parameters cannot be computed.
         """
         n = len(local_points)
         if n < 2 or len(real_points) < n:
-            if parent:
-                UIStyleHelper.show_error_dialog(parent, "計算エラー", "座標変換には最低2点以上の基準点が必要です。")
-            return None
+            raise TransformError("座標変換には最低2点以上の基準点が必要です。")
 
         # N=2: 2点等比相似変換（ヘルマート変換）
         if n == 2:
             p1, p2 = local_points[0], local_points[1]
             P1, P2 = real_points[0], real_points[1]
-            h_params = cls.compute_helmert_2p(p1, p2, P1, P2, parent)
-            if h_params is None:
-                return None
+            h_params = cls.compute_helmert_2p(p1, p2, P1, P2)
             a = h_params["a"]
             b = h_params["b"]
             Tx = h_params["Tx"]
@@ -255,132 +222,14 @@ class CoordinateTransformer:
             if 'aff_res' in locals():
                 return (float(A0), float(B0), float(C0), float(D0), float(E0), float(F0))
             else:
-                if parent:
-                    UIStyleHelper.show_error_dialog(parent, "計算エラー", f"座標変換パラメータの算出に失敗しました。\n詳細: {str(e)}")
-                return None
-
-    def execute_transformation(
-        self,
-        ref_points_data: List[Dict[str, Any]],
-        parent: Optional[QWidget] = None,
-        drawing_name: str = "",
-        layer_manager: Optional[Any] = None,
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """Perform coordinate transformation in standard mathematical system and update point features.
-
-        :param ref_points_data: List of dicts containing ref point configurations:
-                                [{'ref_name': str, 'pixel_x': float, 'pixel_y': float,
-                                  'real_x': float, 'real_y': float, ...}, ...]
-        :param parent: Optional parent QWidget.
-        :param drawing_name: Target drawing name to filter which points to transform.
-        :param layer_manager: Instance of LayerManager to update metadata.
-        :return: Tuple of (success, message, result_dict).
-        :rtype: Tuple[bool, str, Dict[str, Any]]
-        """
-        if not self.point_layer or not self.point_layer.isValid():
-            return False, "打刻点レイヤが無効です。", {}
-
-        num_refs = len(ref_points_data)
-        if num_refs < 2:
-            if parent:
-                UIStyleHelper.show_error_dialog(
-                    parent, "エラー", "座標変換には最低2点以上の基準点が必要です。"
-                )
-            return False, "基準点数が不足しています。", {}
-
-        # 1. Update target_x and target_y in ref_points layer if layer exists
-        if self.ref_point_layer and self.ref_point_layer.isValid():
-            ref_updates: List[Tuple[int, Dict[str, Any]]] = []
-            for rdata in ref_points_data:
-                fid = rdata.get("feature_id")
-                if fid is not None:
-                    target_x = rdata.get("real_x", rdata.get("target_x", 0.0))
-                    target_y = rdata.get("real_y", rdata.get("target_y", 0.0))
-                    ref_updates.append((fid, {"target_x": target_x, "target_y": target_y}))
-            batch_update_attributes(self.ref_point_layer, ref_updates)
-
-        # 2. Prepare correspondence points in mathematical coordinates
-        local_pts: List[Tuple[float, float]] = []
-        real_pts: List[Tuple[float, float]] = []
-
-        for r in ref_points_data:
-            px = float(r.get("pixel_x", r.get("canvas_x", 0.0)))
-            py = float(r.get("pixel_y", r.get("canvas_y", 0.0)))
-            rx = float(r.get("real_x", r.get("target_x", 0.0)))
-            ry = float(r.get("real_y", r.get("target_y", 0.0)))
-            local_pts.append((px, py))
-            real_pts.append((rx, ry))
-
-        final_affine = self.compute_affine_points(local_pts, real_pts, parent=parent)
-        if final_affine is None:
-            return False, "座標変換パラメータの算出に失敗しました。", {}
-
-        mode_str = "HELMERT_2P" if num_refs == 2 else f"AFFINE_{num_refs}P"
-
-        # 3. Compute transformation indicators (rotation and aspect ratio) using core_logic
-        rotation_deg, aspect_ratio_pct = evaluate_residuals(ref_points_data, final_affine)
-
-        # 4. Batch update digitized points coordinates and geometries
-        updated_count = update_point_layer_geometry(
-            self.point_layer, final_affine, drawing_name=drawing_name
-        )
-
-        result_data: Dict[str, Any] = {
-            "mode": mode_str,
-            "rotation_deg": rotation_deg,
-            "aspect_ratio_pct": aspect_ratio_pct,
-            "updated_count": updated_count,
-            "affine_params": final_affine,
-        }
-
-        # Update metadata if layer_manager and drawing_name are provided
-        if layer_manager and drawing_name:
-            file_path = ""
-            meta = layer_manager.load_image_metadata()
-            if drawing_name in meta:
-                file_path = meta[drawing_name].get("file_path", "")
-
-            meta_ref_points = [
-                {
-                    "name": r.get("name", r.get("ref_name", "")),
-                    "pixel_x": float(r.get("pixel_x", r.get("canvas_x", 0.0))),
-                    "pixel_y": float(r.get("pixel_y", r.get("canvas_y", 0.0))),
-                    "real_x": float(r.get("real_x", r.get("target_x", 0.0))),
-                    "real_y": float(r.get("real_y", r.get("target_y", 0.0))),
-                }
-                for r in ref_points_data
-            ]
-            layer_manager.update_image_metadata(drawing_name, file_path, meta_ref_points, final_affine)
-
-        # Save project to persist attribute updates
-        QgsProject.instance().write()
-
-        return True, f"座標変換が完了しました ({updated_count}件更新)", result_data
-
-    def reset_real_coordinates(self) -> None:
-        """Reset real_x and real_y fields in points layer to NULL when reference point configuration changes."""
-        if not self.point_layer or not self.point_layer.isValid():
-            return
-
-        self.point_layer.startEditing()
-        rx_idx = self.point_layer.fields().indexFromName("real_x")
-        ry_idx = self.point_layer.fields().indexFromName("real_y")
-
-        for feat in self.point_layer.getFeatures():
-            if rx_idx != -1:
-                self.point_layer.changeAttributeValue(feat.id(), rx_idx, QVariant())
-            if ry_idx != -1:
-                self.point_layer.changeAttributeValue(feat.id(), ry_idx, QVariant())
-
-        self.point_layer.commitChanges()
-        self.point_layer.triggerRepaint()
+                raise TransformError(f"座標変換パラメータの算出に失敗しました。\n詳細: {str(e)}") from e
 
 
+# 打刻点レイヤの全フィーチャを測地座標系に変換し、CSVファイルへ出力。
 def export_points_to_csv(
     point_layer: QgsVectorLayer,
     filepath: str,
     encoding: str = "utf-8-sig",
-    parent: Optional[QWidget] = None,
 ) -> Tuple[bool, str]:
     """Export digitized points to a CSV file with full headers.
 
@@ -393,7 +242,6 @@ def export_points_to_csv(
     :type filepath: str
     :param encoding: File encoding ('utf-8-sig' or 'cp932').
     :type encoding: str
-    :param parent: Optional parent QWidget.
     :return: Tuple of (success, message).
     :rtype: Tuple[bool, str]
     """
@@ -404,9 +252,7 @@ def export_points_to_csv(
     total_count = len(features_data)
 
     if total_count == 0:
-        if parent:
-            UIStyleHelper.show_warning_dialog(parent, "警告", "出力対象の打刻点が存在しません。")
-        return False, "打刻データが存在しません。"
+        return False, "出力対象の打刻点が存在しません。"
 
     # Check for uncalculated (NULL) real_x / real_y
     uncalculated_count = 0
@@ -417,13 +263,7 @@ def export_points_to_csv(
             uncalculated_count += 1
 
     if uncalculated_count > 0:
-        if parent:
-            UIStyleHelper.show_warning_dialog(
-                parent,
-                "座標未取得エラー",
-                f"実座標が未取得の打刻点が {uncalculated_count} 件存在します。",
-            )
-        return False, "未計算の打刻点が存在します。"
+        return False, f"実座標が未取得の打刻点が {uncalculated_count} 件存在します。"
 
     # Output CSV file
     try:
@@ -461,8 +301,4 @@ def export_points_to_csv(
         return True, f"CSVファイルが正常に出力されました: {filepath} ({total_count}件)"
 
     except Exception as e:
-        if parent:
-            UIStyleHelper.show_error_dialog(
-                parent, "ファイル出力エラー", f"CSVファイルの書き込み中にエラーが発生しました:\n{str(e)}"
-            )
-        return False, str(e)
+        return False, f"CSVファイルの書き込み中にエラーが発生しました:\n{e}"

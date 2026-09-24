@@ -17,11 +17,13 @@ from ..ui.core.validators import RequiredValidator, DuplicateValidator
 
 
 class GridInputLogic(QObject):
+    # LayerManagerと既存点名一覧を保持し、グリッド座標検証の準備を行う。
     def __init__(self, layer_manager, existing_names, parent=None):
         super().__init__(parent)
         self.layer_manager = layer_manager
         self.existing_names = existing_names
 
+    # グリッド座標をLayerManagerのキャッシュに照会して検証・実座標変換する。
     def validate_and_lookup(self, gx: int, gy: str, sub_grid: int) -> Tuple[bool, str, str, Optional[float], Optional[float]]:
         """グリッド座標をLayerManagerのキャッシュに照会して検証・実座標変換する"""
         sub_grid_str = f"{sub_grid:02d}"
@@ -50,6 +52,7 @@ class GridInputLogic(QObject):
 
 
 class PointNameEntryLogic(QObject):
+    # 点名入力ダイアログに必要な点レイヤ・遺構・図面名等のコンテキストを保持する。
     def __init__(self, point_layer, excavation_type, feature_name, drawing_name, is_sp_attribute, parent=None):
         super().__init__(parent)
         self.point_layer = point_layer
@@ -58,6 +61,7 @@ class PointNameEntryLogic(QObject):
         self.drawing_name = drawing_name
         self.is_sp_attribute = is_sp_attribute
 
+    # SP属性の必須チェックと、全属性に対する重複チェックを行う。
     def validate_inputs(self, point_name: str, branch_no: str) -> Tuple[bool, str]:
         """SP属性の必須チェックと、全属性に対する重複チェックを行う"""
         if self.is_sp_attribute:
@@ -80,10 +84,12 @@ class PointNameEntryLogic(QObject):
 
 
 class FeatureManageLogic(QObject):
+    # 遺構名と色の対応表を保持し、遺構名検証の準備を行う。
     def __init__(self, feature_colors, parent=None):
         super().__init__(parent)
         self.feature_colors = feature_colors
 
+    # 遺構名の入力検証と重複チェックを行う。
     def validate_feature_name(self, text: str, mode: str, current_feature: str) -> Tuple[bool, str, str]:
         """遺構名の入力検証と重複チェックを行う"""
         if not text:
@@ -103,10 +109,12 @@ class FeatureManageLogic(QObject):
 
 
 class PointEditLogic(QObject):
+    # LayerManagerを保持し、点情報編集の入力検証の準備を行う。
     def __init__(self, layer_manager, parent=None):
         super().__init__(parent)
         self.layer_manager = layer_manager
 
+    # 点情報編集の入力検証と重複チェックを行う。
     def validate_inputs(
         self,
         excavation_type: str,

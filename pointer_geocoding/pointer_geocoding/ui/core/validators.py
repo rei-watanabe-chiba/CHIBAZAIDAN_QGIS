@@ -44,6 +44,7 @@ class Validator(ABC):
     """Base type for a single, presentation-agnostic input-validation check."""
 
     @abstractmethod
+    # サブクラスで実装する検証ロジックの抽象メソッド。
     def validate(self, value) -> ValidationResult:
         """Judge whether ``value`` satisfies this validator's rule.
 
@@ -56,10 +57,12 @@ class Validator(ABC):
 class RequiredValidator(Validator):
     """Fails when the (string) value is empty or whitespace-only."""
 
+    # エラーメッセージとフォーカス対象フィールドIDを保持する初期化処理。
     def __init__(self, message: str = "", focus_field_id: Optional[str] = None) -> None:
         self.message = message
         self.focus_field_id = focus_field_id
 
+    # 値が空文字または空白のみの場合に検証失敗とする。
     def validate(self, value) -> ValidationResult:
         text = value.strip() if isinstance(value, str) else value
         if not text:
@@ -77,11 +80,12 @@ class RegexValidator(Validator):
         "must look like this" pattern).
     """
 
+    # 正規表現パターンと判定モード(マッチ時に拒否/許可)を保持する初期化処理。
     def __init__(
-        self, 
-        pattern: str, 
-        reject_if_match: bool = True, 
-        message: str = "", 
+        self,
+        pattern: str,
+        reject_if_match: bool = True,
+        message: str = "",
         focus_field_id: Optional[str] = None
     ) -> None:
         self.pattern = pattern
@@ -89,6 +93,7 @@ class RegexValidator(Validator):
         self.message = message
         self.focus_field_id = focus_field_id
 
+    # 値を正規表現パターンと照合し、reject_if_matchの設定に応じて妥当性を判定する。
     def validate(self, value) -> ValidationResult:
         text = value if isinstance(value, str) else str(value)
         matched = re.search(self.pattern, text) is not None
@@ -108,22 +113,25 @@ class DuplicateValidator(Validator):
         membership test (dict-key lookup, feature scan, etc.).
     """
 
+    # 重複判定用コールバック(exists_check)とエラー情報を保持する初期化処理。
     def __init__(
-        self, 
-        exists_check: Callable[..., bool], 
-        message: str = "", 
+        self,
+        exists_check: Callable[..., bool],
+        message: str = "",
         focus_field_id: Optional[str] = None
     ) -> None:
         self.exists_check = exists_check
         self.message = message
         self.focus_field_id = focus_field_id
 
+    # 呼び出し元が渡したexists_checkにより値の重複有無を判定する。
     def validate(self, value) -> ValidationResult:
         if self.exists_check(value):
             return ValidationResult(False, self.message, focus_field_id=self.focus_field_id)
         return ValidationResult(True)
 
 
+# ValidationResultが失敗の場合にQMessageBox.warningでメッセージを表示し、必要に応じてフォーカスを戻す。
 def show_validation_error(
     parent: Optional[QWidget],
     title: str,

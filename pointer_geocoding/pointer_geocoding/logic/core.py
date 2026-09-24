@@ -52,6 +52,7 @@ class AttributeType(str, Enum):
 # 1. Coordinate System Adapters
 # =============================================================================
 
+# 数学/キャンバス座標(X:東西, Y:南北)を、測量座標(X:南北, Y:東西)に変換する。
 def to_survey_coords(math_x: float, math_y: float) -> Tuple[float, float]:
     """Convert standard mathematical/canvas coordinates to survey coordinates.
 
@@ -75,6 +76,7 @@ def to_survey_coords(math_x: float, math_y: float) -> Tuple[float, float]:
     return survey_x, survey_y
 
 
+# 測量座標(X:南北, Y:東西)を、数学/キャンバス座標(X:東西, Y:南北)に変換する。
 def from_survey_coords(survey_x: float, survey_y: float) -> Tuple[float, float]:
     """Convert survey coordinates to standard mathematical/canvas coordinates.
 
@@ -102,6 +104,7 @@ def from_survey_coords(survey_x: float, survey_y: float) -> Tuple[float, float]:
 # 2. Point Layer Geometry & Attribute Synchronization Logic
 # =============================================================================
 
+# 更新リストを受け取り、編集セッション開始からフィールド名解決・属性/ジオメトリ変更・コミットまでを一括実行する。
 def batch_update_attributes(
     layer: QgsVectorLayer,
     updates: List[Tuple[int, Dict[str, Any]]],
@@ -150,6 +153,7 @@ def batch_update_attributes(
     return processed_count
 
 
+# アフィン変換パラメータを用い、対象図面名に一致する点群の実座標・キャンバス座標・ジオメトリを一括更新する。
 def update_point_layer_geometry(
     point_layer: QgsVectorLayer,
     affine_params: Tuple[float, float, float, float, float, float],
@@ -215,7 +219,6 @@ def update_point_layer_geometry(
         geometries[feat.id()] = QgsGeometry.fromPointXY(QgsPointXY(calc_math_x, calc_math_y))
 
     updated_count = batch_update_attributes(point_layer, updates, geometries=geometries)
-    point_layer.triggerRepaint()
     return updated_count
 
 
@@ -223,6 +226,7 @@ def update_point_layer_geometry(
 # 3. Residual Evaluation Logic
 # =============================================================================
 
+# アフィンパラメータ(または基準点データ)から、画像の回転角(度)と縦横比変化(%)を算出する。
 def evaluate_residuals(
     ref_points_data_or_params: Any,
     affine_params: Optional[Tuple[float, float, float, float, float, float]] = None,
@@ -263,6 +267,7 @@ def evaluate_residuals(
 # 4. Point Number & Duplicate Verification Logic
 # =============================================================================
 
+# 出土形態・遺構名・点名・枝番の組み合わせが同一の点が既に存在するかを図面横断で判定する。
 def check_point_duplicate(
     point_layer: QgsVectorLayer,
     excavation_type: str,
@@ -326,6 +331,27 @@ def check_point_duplicate(
     return False
 
 
+# 重複判定用のキー(出土形態[+遺構名]・点名・枝番)を返す。check_point_duplicate と同一の判定規則。
+def point_duplicate_key(
+    excavation_type: str,
+    feature_name: str,
+    point_name: str,
+    branch_no: str,
+) -> Optional[Tuple[str, str, str, str]]:
+    """Return the duplicate-detection key used by check_point_duplicate().
+
+    Grid points ignore feature_name (key uses ""); feature points include it.
+    Returns None when excavation_type is neither GRID nor FEATURE (such a
+    point never matches any duplicate query in check_point_duplicate()).
+    """
+    if excavation_type == ExcavationType.GRID.value:
+        return (ExcavationType.GRID.value, "", point_name, branch_no)
+    if excavation_type == ExcavationType.FEATURE.value:
+        return (ExcavationType.FEATURE.value, feature_name, point_name, branch_no)
+    return None
+
+
+# 出土形態・遺構名・点名・枝番(・図面名)から、重複エラー等で表示する識別文字列を組み立てる。
 def build_point_ident(
     excavation_type: str,
     feature_name: str,
@@ -372,6 +398,7 @@ def build_point_ident(
     return ident
 
 
+# 重複チェックを行い、重複していればbuild_point_identで整形した識別文字列を返す(check_point_duplicate+build_point_identの合成)。
 def check_duplicate_and_build_message(
     point_layer: QgsVectorLayer,
     excavation_type: str,
@@ -405,6 +432,7 @@ def check_duplicate_and_build_message(
     return None
 
 
+# 同一グループ内で最も新しく打刻された点(point_id最大)のpoint_nameから採番用の数値部を取り出し、次の点番号を決定する。
 def get_next_point_number(
     point_layer: QgsVectorLayer,
     excavation_type: str,
@@ -471,6 +499,7 @@ def get_next_point_number(
     return body_num + 1
 
 
+# クリックで得た座標・属性値・ピクセル座標から、レイヤーに追加可能な打刻済みフィーチャを構築する。
 def build_digitized_feature(
     point_layer: QgsVectorLayer,
     next_id: int,
@@ -527,6 +556,7 @@ def build_digitized_feature(
     return feat
 
 
+# レイヤー全体をスキャンし、既存point_idの最大値+1を次の主キー候補として返す。
 def get_next_point_id(point_layer: QgsVectorLayer) -> int:
     """Determine the next available integer point_id (primary key) across the whole layer.
 
@@ -548,13 +578,13 @@ def get_next_point_id(point_layer: QgsVectorLayer) -> int:
     return max_id + 1
 
 
+# 編集セッションを開始し、指定フィーチャを1件追加・コミットする(再描画はコミット時のネイティブなシグナルに委ねる)。
 def insert_feature_to_layer(point_layer: QgsVectorLayer, feature: QgsFeature) -> bool:
-    """Insert a single feature into a vector layer via an edit session and repaint.
+    """Insert a single feature into a vector layer via an edit session.
 
-    Preserves the exact call sequence used previously inline in
-    Tab2DigitizingMixin._on_canvas_clicked: startEditing -> addFeatures ->
-    commitChanges -> triggerRepaint. No additional success/failure handling
-    is introduced beyond what existed before.
+    Call sequence: startEditing -> addFeatures -> commitChanges (repaint is left
+    to the native signals emitted on commit). No additional success/failure
+    handling is introduced beyond what existed before.
 
     :param point_layer: Target vector layer.
     :type point_layer: QgsVectorLayer
@@ -568,7 +598,6 @@ def insert_feature_to_layer(point_layer: QgsVectorLayer, feature: QgsFeature) ->
     point_layer.startEditing()
     point_layer.addFeatures([feature])
     point_layer.commitChanges()
-    point_layer.triggerRepaint()
     return True
 
 
@@ -576,6 +605,7 @@ def insert_feature_to_layer(point_layer: QgsVectorLayer, feature: QgsFeature) ->
 # 5. Excel-style Column Letter Conversion Utilities
 # =============================================================================
 
+# 1始まりの数値インデックスを、Excel形式の列アルファベット文字列に変換する。
 def to_excel_column(n: int) -> str:
     """Convert a 1-based index into an Excel-style column letter (1 -> 'A', 26 -> 'Z', 27 -> 'AA', 79 -> 'CA').
 
@@ -593,6 +623,7 @@ def to_excel_column(n: int) -> str:
     return "".join(reversed(result))
 
 
+# Excel形式の列アルファベット文字列を、1始まりの数値インデックスに変換する。
 def from_excel_column(col_str: str) -> int:
     """Convert Excel-style column alphabet to 1-based index (e.g. 'A'->1, 'Z'->26, 'AA'->27).
 
@@ -614,6 +645,7 @@ def from_excel_column(col_str: str) -> int:
 # 6. Affine Inverse Adapter (map coordinates -> source drawing pixel coordinates)
 # =============================================================================
 
+# アフィン変換の逆変換を用い、マップ座標(数学座標)から元図面上のピクセル座標を逆算する。
 def pixel_from_affine(
     affine_params: Optional[Tuple[float, float, float, float, float, float]],
     map_point: QgsPointXY,
@@ -649,10 +681,82 @@ def pixel_from_affine(
     return pixel_x, pixel_y
 
 
+# (source, mtime) -> (width, height) のキャッシュ。クリックごとのファイルオープンを避ける。
+_SOURCE_SIZE_CACHE: Dict[Tuple[str, Optional[float]], Tuple[int, int]] = {}
+
+
+# ラスタレイヤの元画像のピクセル寸法(幅,高さ)を返す。回転ワールドファイルではQGISのレイヤ寸法が回転後になるため使わない。
+def get_source_image_size(raster_layer: Any) -> Optional[Tuple[int, int]]:
+    """Return the pixel size (width, height) of the original source image.
+
+    Priority: GDAL RasterXSize/YSize -> QImageReader size -> layer width()/height().
+    Results are cached by (source path, file mtime).
+
+    :return: (width, height), or None if no size could be determined.
+    """
+    try:
+        source = raster_layer.source()
+    except Exception:
+        source = ""
+    path = source.split("|", 1)[0] if source else ""
+
+    mtime: Optional[float] = None
+    if path:
+        try:
+            import os
+            mtime = os.path.getmtime(path)
+        except Exception:
+            mtime = None
+
+    key = (source, mtime)
+    if source and key in _SOURCE_SIZE_CACHE:
+        return _SOURCE_SIZE_CACHE[key]
+
+    size: Optional[Tuple[int, int]] = None
+
+    if path:
+        try:
+            import warnings
+            from osgeo import gdal
+            with warnings.catch_warnings():
+                # UseExceptions未指定のFutureWarningを抑止(グローバル設定は変更しない)
+                warnings.simplefilter("ignore")
+                ds = gdal.Open(path)
+            if ds is not None:
+                try:
+                    w, h = int(ds.RasterXSize), int(ds.RasterYSize)
+                finally:
+                    ds = None
+                if w > 0 and h > 0:
+                    size = (w, h)
+        except Exception:
+            size = None
+
+    if size is None and path:
+        try:
+            from qgis.PyQt.QtGui import QImageReader
+            qsize = QImageReader(path).size()
+            if qsize.isValid() and qsize.width() > 0 and qsize.height() > 0:
+                size = (qsize.width(), qsize.height())
+        except Exception:
+            size = None
+
+    if size is not None:
+        if source:
+            _SOURCE_SIZE_CACHE[key] = size
+        return size
+
+    try:
+        return int(raster_layer.width()), int(raster_layer.height())
+    except Exception:
+        return None
+
+
 # =============================================================================
 # 7. QgsFeature Attribute Access Helpers (NULL-safe type conversion)
 # =============================================================================
 
+# QgsFeatureの属性値をNULL・フィールド欠如に配慮しつつ、トリム済み文字列として安全に取得する。
 def safe_get_str(feat: QgsFeature, field_name: str, default: str = "") -> str:
     """Safely read a QgsFeature attribute as a trimmed string, guarding NULL/missing values.
 
@@ -682,6 +786,7 @@ def safe_get_str(feat: QgsFeature, field_name: str, default: str = "") -> str:
     return str(value).strip()
 
 
+# QgsFeatureの属性値をNULL・フィールド欠如・変換失敗に配慮しつつ、float型として安全に取得する。
 def safe_get_float(feat: QgsFeature, field_name: str, default: float = 0.0) -> float:
     """Safely read a QgsFeature attribute as a float, guarding NULL/missing/invalid values.
 
@@ -707,6 +812,7 @@ def safe_get_float(feat: QgsFeature, field_name: str, default: float = 0.0) -> f
         return default
 
 
+# QgsFeatureの属性値をNULL・フィールド欠如・変換失敗に配慮しつつ、int型として安全に取得する。
 def safe_get_int(feat: QgsFeature, field_name: str, default: int = 0) -> int:
     """Safely read a QgsFeature attribute as an int, guarding NULL/missing/invalid values.
 

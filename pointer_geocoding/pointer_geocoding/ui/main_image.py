@@ -22,7 +22,7 @@ from qgis.PyQt.QtWidgets import (
 from .constants import UIConfig, UILabels, UIPlaceholders, UIDialogTitles, UIMessages
 from .core.builder import CoreUIBuilder
 from .core.field_spec import ButtonDef, FieldSpec, InfoLine, PanelSpec, WidgetType
-from .core.state import ChangeTab1ModeAction, SetGeorefStateAction
+from .core.state import ChangeTab1ModeAction, SetGeorefStateAction, SetValidationAction
 from .core.validators import ValidationResult, RequiredValidator, RegexValidator, DuplicateValidator, show_validation_error
 from .style import UIStyleHelper
 from .dialogs import GridInputDialog
@@ -131,6 +131,7 @@ TAB1_TRANSFORM_SECTION_SPEC = PanelSpec(
     ],
 )
 
+# Tab1(画像追加・事前ジオリファレンス)のUI構築、Logic/Controllerの生成とイベントバインド。
 def create_tab1_ui(dock_widget) -> QWidget:
     """Construct Tab 1: Image Addition & Pre-Georeferencing."""
     scroll = QScrollArea()
@@ -169,7 +170,6 @@ def create_tab1_ui(dock_widget) -> QWidget:
     )
 
     callbacks = {
-        "get_image_dialog": lambda: getattr(dock_widget, "image_dialog", None),
         "is_focus_mode_active": lambda: dock_widget.state_store.state.focus_active if hasattr(dock_widget, "state_store") else False,
         "update_symbology_opacity": lambda: dock_widget.update_symbology_opacity() if hasattr(dock_widget, "update_symbology_opacity") else None,
         "ensure_drawing_selected": lambda name: dock_widget._ensure_drawing_selected(name) if hasattr(dock_widget, "_ensure_drawing_selected") else None,
@@ -183,16 +183,20 @@ def create_tab1_ui(dock_widget) -> QWidget:
     # View-side GUI event handlers
     # =========================================================================
 
+    # コンボのインデックスをシグナルを発火させずにプログラムから更新する。
+    def _set_combo_index_silently(combo, idx: int) -> None:
+        combo.blockSignals(True)
+        combo.setCurrentIndex(idx)
+        combo.blockSignals(False)
+
     def _refresh_edit_layer_combo():
-        meta = dock_widget.layer_manager.load_image_metadata()
+        layer_names = logic.get_image_layer_names()
         combo = image_panel.get("edit_layer")
-        UIStyleHelper.repopulate_combo_box(combo, list(meta.keys()), preserve_current=False)
-        if dock_widget.state_store.state.confirmed_layer_name in meta:
+        UIStyleHelper.repopulate_combo_box(combo, layer_names, preserve_current=False)
+        if dock_widget.state_store.state.confirmed_layer_name in layer_names:
             idx = combo.findText(dock_widget.state_store.state.confirmed_layer_name)
             if idx >= 0:
-                combo.blockSignals(True)
-                combo.setCurrentIndex(idx)
-                combo.blockSignals(False)
+                _set_combo_index_silently(combo, idx)
 
     def _on_mode_changed(idx: int):
         mode = "new" if idx == 0 else "edit"
@@ -205,22 +209,29 @@ def create_tab1_ui(dock_widget) -> QWidget:
             norm_path = os.path.normpath(filepath)
             base_name, _ = os.path.splitext(os.path.basename(norm_path))
             dock_widget.state_store.dispatch(SetGeorefStateAction(
-                image_path=norm_path, layer_name=base_name, clear_ref_points=True, affine_params=None
+                image_path=norm_path, layer_name=base_name, clear_ref_points=True, clear_affine=True
             ))
 
     def _on_edit_layer_changed(*args):
         layer_name = image_panel.get_value("edit_layer")
         if not layer_name:
-            dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+            dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
             return
         
         meta_data = logic.load_edit_layer_metadata(layer_name)
         if meta_data:
             dock_widget.state_store.dispatch(SetGeorefStateAction(**meta_data))
             if not logic.is_modifying_layer() and meta_data["image_path"]:
-                logic.show_preview_if_needed(_on_preview_canvas_point_clicked)
+                _show_preview()
         else:
-            dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+            dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
+
+    # ハンドラ失敗時のメッセージをダイアログで通知し、共有のエラー状態を解除する。
+    def _notify_error_and_clear(title: str) -> None:
+        message = dock_widget.state_store.state.status_message
+        if message:
+            QMessageBox.warning(dock_widget, title, message)
+        dock_widget.state_store.dispatch(SetValidationAction(False, ""))
 
     def _on_rename_layer_clicked():
         old_name = image_panel.get_value("edit_layer")
@@ -245,9 +256,11 @@ def create_tab1_ui(dock_widget) -> QWidget:
                 combo = image_panel.get("edit_layer")
                 idx = combo.findText(new_name)
                 if idx >= 0:
-                    combo.setCurrentIndex(idx)
+                    _set_combo_index_silently(combo, idx)
             finally:
                 logic.set_modifying_layer(False)
+        else:
+            _notify_error_and_clear(UIMessages.ERR_TITLE_GENERIC)
 
     def _on_delete_layer_clicked():
         layer_name = image_panel.get_value("edit_layer")
@@ -261,6 +274,11 @@ def create_tab1_ui(dock_widget) -> QWidget:
             if QMessageBox.question(dock_widget, UIMessages.MSG_CONFIRM_POINTS_EXIST_TITLE, UIMessages.MSG_CONFIRM_POINTS_EXIST, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
                 return
                 
+        # 画像ファイル削除前にプレビューを解放し、ファイルを開いたままにしない。
+        image_dialog = getattr(dock_widget, "image_dialog", None)
+        if image_dialog is not None:
+            image_dialog.clean_up()
+
         dispatcher.dispatch(DeleteLayerAction(layer_name=layer_name, has_points=has_points))
         
         if not dock_widget.state_store.state.has_input_error:
@@ -271,13 +289,14 @@ def create_tab1_ui(dock_widget) -> QWidget:
                 combo = image_panel.get("edit_layer")
                 if combo.count() > 0:
                     if combo.currentIndex() != 0:
-                        combo.setCurrentIndex(0)
-                    else:
-                        _on_edit_layer_changed()
+                        _set_combo_index_silently(combo, 0)
+                    _on_edit_layer_changed()
                 else:
-                    dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+                    dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
             finally:
                 logic.set_modifying_layer(False)
+        else:
+            _notify_error_and_clear(UIMessages.ERR_TITLE_GENERIC)
 
     def _on_confirm_image_clicked():
         state = dock_widget.state_store.state
@@ -285,7 +304,7 @@ def create_tab1_ui(dock_widget) -> QWidget:
             if not state.current_copied_image_path or not os.path.isfile(state.current_copied_image_path):
                 QMessageBox.information(dock_widget, UIMessages.MSG_TITLE_INFO, UIMessages.MSG_CONFIRM_IMAGE_FIRST)
                 return
-            logic.show_preview_if_needed(_on_preview_canvas_point_clicked)
+            _show_preview()
             return
 
         layer_name = image_panel.get_value("image_name").strip()
@@ -299,8 +318,7 @@ def create_tab1_ui(dock_widget) -> QWidget:
             show_validation_error(dock_widget, UIMessages.ERR_TITLE_INPUT, result, image_panel.get("image_name"))
             return
 
-        meta = dock_widget.layer_manager.load_image_metadata()
-        result = DuplicateValidator(lambda name: name in meta, message=UIMessages.ERR_DUPLICATE_LAYER_NAME.format(name=layer_name)).validate(layer_name)
+        result = DuplicateValidator(lambda name: logic.image_layer_exists(name), message=UIMessages.ERR_DUPLICATE_LAYER_NAME.format(name=layer_name)).validate(layer_name)
         if not result.is_valid:
             show_validation_error(dock_widget, UIMessages.ERR_TITLE_DUPLICATE, result, image_panel.get("image_name"))
             return
@@ -315,13 +333,15 @@ def create_tab1_ui(dock_widget) -> QWidget:
             QMessageBox.warning(dock_widget, UIMessages.ERR_TITLE_FILE, UIMessages.ERR_SOURCE_HAS_WORLDFILE)
             return
 
-        dock_widget.state_store.dispatch(SetGeorefStateAction(layer_name=layer_name, image_path=src_path, clear_ref_points=True, affine_params=None))
-        logic.show_preview_if_needed(_on_preview_canvas_point_clicked)
+        dock_widget.state_store.dispatch(SetGeorefStateAction(layer_name=layer_name, image_path=src_path, clear_ref_points=True, clear_affine=True))
+        _show_preview()
+
+    ref_move_wired = [False]
 
     def _on_preview_canvas_point_clicked(pixel_x: float, pixel_y: float) -> None:
-        snapped_index = logic.find_snapped_ref_point(pixel_x, pixel_y)
         ref_points = dock_widget.state_store.state.ref_points_data
         image_dialog = getattr(dock_widget, "image_dialog", None)
+        snapped_index = image_dialog.find_snapped_ref_point(pixel_x, pixel_y) if image_dialog is not None else None
         parent_dlg = image_dialog or dock_widget
 
         if snapped_index is not None:
@@ -337,7 +357,7 @@ def create_tab1_ui(dock_widget) -> QWidget:
                     new_refs[snapped_index]["name"] = dlg.result_grid_name
                     new_refs[snapped_index]["real_x"] = dlg.result_real_x
                     new_refs[snapped_index]["real_y"] = dlg.result_real_y
-                dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
+                dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs))
             return
 
         if len(ref_points) >= 4:
@@ -353,7 +373,51 @@ def create_tab1_ui(dock_widget) -> QWidget:
             }
             new_refs = list(ref_points)
             new_refs.append(pt_entry)
-            dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
+            dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs))
+
+    # プレビュー上で基準点をドラッグ移動した際、該当点のピクセル座標のみ更新する。
+    def _on_ref_point_moved(index: int, pixel_x: float, pixel_y: float) -> None:
+        ref_points = dock_widget.state_store.state.ref_points_data
+        if index < 0 or index >= len(ref_points):
+            return
+        new_refs = list(ref_points)
+        moved = dict(new_refs[index])
+        moved["pixel_x"] = pixel_x
+        moved["pixel_y"] = pixel_y
+        new_refs[index] = moved
+        dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs))
+
+    # プレビューを表示する。同じ画像なら既存キャンバスを再利用し、異なる場合はラスタを再ロードして基準点マーカーを再構築する。
+    def _show_preview() -> None:
+        state = dock_widget.state_store.state
+        path = state.current_copied_image_path
+        if not path or not os.path.isfile(path):
+            return
+        image_dialog = getattr(dock_widget, "image_dialog", None)
+        if image_dialog is None:
+            return
+        if not ref_move_wired[0]:
+            image_dialog.ref_point_moved.connect(_on_ref_point_moved)
+            ref_move_wired[0] = True
+
+        same_image = (
+            image_dialog.raster_layer is not None
+            and os.path.normcase(os.path.normpath(image_dialog.preview_image_path))
+            == os.path.normcase(os.path.normpath(path))
+        )
+        if same_image:
+            image_dialog.set_ref_points_data(state.ref_points_data)
+        else:
+            raster = logic.prepare_preview_raster(path)
+            if raster is None:
+                return
+            image_dialog.setup_raster(raster, _on_preview_canvas_point_clicked, state.ref_points_data, source_path=path)
+            # setup_raster()でマーカーは全消去されるため、基準点マーカーを再構築する。
+            for rdata in state.ref_points_data:
+                image_dialog.add_marker(rdata["pixel_x"], rdata["pixel_y"], rdata.get("name", ""))
+        image_dialog.show()
+        image_dialog.raise_()
+        image_dialog.activateWindow()
 
     def _on_ref_table_cell_changed(row: int, column: int):
         ref_points = dock_widget.state_store.state.ref_points_data
@@ -382,7 +446,7 @@ def create_tab1_ui(dock_widget) -> QWidget:
             else:
                 new_refs[row]["real_x"] = new_refs[row]["real_y"] = None
 
-            dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs, affine_params=None))
+            dock_widget.state_store.dispatch(SetGeorefStateAction(ref_points=new_refs))
 
     def _on_transform_clicked():
         state = dock_widget.state_store.state
@@ -402,6 +466,9 @@ def create_tab1_ui(dock_widget) -> QWidget:
                 UIMessages.MSG_TITLE_INFO, UILabels.MSG_TRANSFORM_SUCCESS,
                 level=Qgis.MessageLevel.Success, duration=4
             )
+        else:
+            QMessageBox.critical(dock_widget, UIMessages.ERR_TITLE_CALC, dock_widget.state_store.state.status_message)
+            dock_widget.state_store.dispatch(SetValidationAction(False, ""))
 
     def _on_export_layer_clicked():
         state = dock_widget.state_store.state
@@ -423,10 +490,12 @@ def create_tab1_ui(dock_widget) -> QWidget:
                 level=Qgis.MessageLevel.Success, duration=6
             )
             if state.tab1_mode == "new":
-                dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+                dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
             
             image_dialog = getattr(dock_widget, "image_dialog", None)
             if image_dialog: image_dialog.close()
+        else:
+            _notify_error_and_clear(UIMessages.ERR_TITLE_FILE)
 
     # Bindings
     mode_panel.bind("mode_changed", _on_mode_changed)
@@ -474,33 +543,20 @@ def create_tab1_ui(dock_widget) -> QWidget:
         count = len(state.ref_points_data)
         fname = (state.confirmed_layer_name if state.confirmed_layer_name else (os.path.basename(state.current_copied_image_path) if state.current_copied_image_path else UILabels.UNLOADED))
         info_panel.get("tab1_info.line1").setText(UILabels.TAB1_INFO_IMAGE_REF.format(name=fname, count=count))
-        info_panel.get("tab1_info.line3_6").setText("")
 
-        all_coords_valid = False
-        if count >= 2:
-            all_coords_valid = all(r["real_x"] is not None and r["real_y"] is not None for r in state.ref_points_data)
+        can_transform = count >= 2 and all(r["real_x"] is not None and r["real_y"] is not None for r in state.ref_points_data)
+        transform_panel.get("transform").setEnabled(can_transform)
+        transform_panel.get("export_layer").setEnabled(bool(state.is_transformed))
 
-        if count < 2:
-            transform_panel.get("transform").setEnabled(False)
-            transform_panel.get("export_layer").setEnabled(False)
-            UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.STATUS_NEED_MORE_REFS.format(count=count), status_type="warning")
-        elif not all_coords_valid:
-            transform_panel.get("transform").setEnabled(False)
-            transform_panel.get("export_layer").setEnabled(False)
-            UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.STATUS_INPUT_COORDS.format(count=count), status_type="info")
+        if not state.is_transformed:
+            info_panel.get("tab1_info.line3_6").setText(UILabels.TAB1_INFO_RESIDUAL_INIT)
+            UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.TRANSFORM_INIT_STATUS, status_type="error" if can_transform else "info")
         else:
-            transform_panel.get("transform").setEnabled(True)
             mode_str = UILabels.TRANSFORM_HELMERT if count == 2 else UILabels.TRANSFORM_AFFINE.format(count=count)
-            
-            if state.calculated_affine_params is None:
-                transform_panel.get("export_layer").setEnabled(False)
-                UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.STATUS_READY_TRANSFORM.format(count=count, mode=mode_str), status_type="info")
-            else:
-                transform_panel.get("export_layer").setEnabled(True)
-                rotation_deg, aspect_ratio_pct = logic.get_residuals_summary(state.ref_points_data, state.calculated_affine_params)
-                res_summary = f"【{mode_str} 計算完了】\n画像の回転角度: {rotation_deg:.2f} 度\nアスペクト比(縦/横): {aspect_ratio_pct:.2f} %"
-                info_panel.get("tab1_info.line3_6").setText(res_summary)
-                UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.TAB1_INFO_TRANSFORM_DONE, status_type="success")
+            rotation_deg, aspect_ratio_pct = logic.get_residuals_summary(state.ref_points_data, state.calculated_affine_params)
+            res_summary = f"【{mode_str} 計算完了】\n画像の回転角度: {rotation_deg:.2f} 度\nアスペクト比(縦/横): {aspect_ratio_pct:.2f} %"
+            info_panel.get("tab1_info.line3_6").setText(res_summary)
+            UIStyleHelper.update_status_panel(info_panel.get("tab1_info"), info_panel.get("tab1_info.line2"), UILabels.TAB1_INFO_TRANSFORM_DONE, status_type="success")
 
     def _on_state_changed(state: Any, diff: Dict[str, Any]):
         if "tab1_mode" in diff:
@@ -517,21 +573,19 @@ def create_tab1_ui(dock_widget) -> QWidget:
                     combo = image_panel.get("edit_layer")
                     if combo.count() > 0:
                         if combo.currentIndex() != 0:
-                            combo.blockSignals(True)
-                            combo.setCurrentIndex(0)
-                            combo.blockSignals(False)
+                            _set_combo_index_silently(combo, 0)
                         _on_edit_layer_changed()
                     else:
-                        dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+                        dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
                 finally:
                     logic.set_modifying_layer(False)
 
                 if state.current_copied_image_path:
-                    logic.show_preview_if_needed(_on_preview_canvas_point_clicked)
+                    _show_preview()
             else:
-                dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, affine_params=None))
+                dock_widget.state_store.dispatch(SetGeorefStateAction(image_path="", layer_name="", clear_ref_points=True, clear_affine=True))
 
-            has_images = bool(dock_widget.layer_manager.load_image_metadata())
+            has_images = bool(logic.get_image_layer_names())
             if state.tab1_mode == "edit":
                 image_panel.get("rename_layer").setEnabled(has_images)
                 image_panel.get("delete_layer").setEnabled(has_images)

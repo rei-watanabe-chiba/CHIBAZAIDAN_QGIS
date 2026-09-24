@@ -23,6 +23,7 @@ class EventDispatcher:
     を経由して UIStateStore へ処理結果を反映するディスパッチャークラス。
     """
 
+    # EventDispatcherの初期化、UIStateStoreの保持とハンドラ登録辞書の生成。
     def __init__(self, state_store: UIStateStore) -> None:
         """
         Args:
@@ -32,6 +33,7 @@ class EventDispatcher:
         # action_type -> {"handler": Callable, "validators": List}
         self._handlers: Dict[Type[UIAction], Dict[str, Any]] = {}
 
+    # 特定のUIActionに対するハンドラと前置バリデーターの登録。
     def register_handler(
         self,
         action_type: Type[UIAction],
@@ -51,6 +53,7 @@ class EventDispatcher:
             "validators": validators or []
         }
 
+    # UIActionのディスパッチ、バリデーション・ビジー制御・ハンドラ実行・例外キャッチのパイプライン処理。
     def dispatch(self, action: UIAction) -> None:
         """
         アクションをディスパッチし、パイプライン処理を実行する。

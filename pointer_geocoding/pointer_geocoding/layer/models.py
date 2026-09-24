@@ -21,6 +21,7 @@ from qgis.core import (
 )
 
 
+# 指定パスのJSONファイルを安全に読み込み、失敗時はdefaultを返す。
 def safe_json_load(path: Optional[str], default: Any = None) -> Any:
     """Safely load JSON data from a file path.
 
@@ -44,6 +45,7 @@ def safe_json_load(path: Optional[str], default: Any = None) -> Any:
         return default
 
 
+# データをJSONとして指定パスに安全に書き込み、成功可否をbool値で返す。
 def safe_json_save(path: Optional[str], data: Any, ensure_dir: bool = False) -> bool:
     """Safely write `data` as JSON to `path`.
 
@@ -91,31 +93,37 @@ class PluginSettings:
     scale_major_grid: int = -1    # -1 = always visible
     scale_minor_grid: int = 500   # scale denominator threshold
 
+    # 設定内容を標準の辞書形式に変換する。
     def to_dict(self) -> Dict[str, Any]:
         """Convert settings to standard dictionary."""
         return asdict(self)
 
     @classmethod
+    # 辞書から設定インスタンスを生成する(未知のキーは除外)。
     def from_dict(cls, data: Dict[str, Any]) -> "PluginSettings":
         """Instantiate settings from a dictionary, filtering unknown keys."""
         valid_fields = {f.name for f in fields(cls)}
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
 
+    # 辞書互換の.get()メソッド。
     def get(self, key: str, default: Any = None) -> Any:
         """Dictionary-compatible .get() method."""
         return getattr(self, key, default)
 
+    # 辞書互換のインデックスアクセスを提供する。
     def __getitem__(self, key: str) -> Any:
         """Dictionary-compatible indexing."""
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
 
+    # 辞書互換のインデックス代入を提供する。
     def __setitem__(self, key: str, value: Any) -> None:
         """Dictionary-compatible assignment."""
         setattr(self, key, value)
 
+    # 辞書互換の'in'演算子を提供する。
     def __contains__(self, key: str) -> bool:
         """Dictionary-compatible 'in' operator."""
         return hasattr(self, key)
@@ -130,11 +138,13 @@ class RefPointMeta:
     real_x: float = 0.0
     real_y: float = 0.0
 
+    # 参照点メタデータを辞書形式に変換する。
     def to_dict(self) -> Dict[str, Any]:
         """Convert reference point metadata to dictionary."""
         return asdict(self)
 
     @classmethod
+    # 辞書からRefPointMetaを構築する。
     def from_dict(cls, data: Dict[str, Any]) -> "RefPointMeta":
         """Construct RefPointMeta from dictionary."""
         return cls(
@@ -153,6 +163,7 @@ class ImageLayerMeta:
     ref_points: List[Dict[str, Any]] = field(default_factory=list)
     affine_params: Optional[List[float]] = None
 
+    # 画像レイヤーメタデータを辞書形式に変換する。
     def to_dict(self) -> Dict[str, Any]:
         """Convert image layer metadata to dictionary."""
         return {
@@ -162,6 +173,7 @@ class ImageLayerMeta:
         }
 
     @classmethod
+    # 辞書からImageLayerMetaを構築する。
     def from_dict(cls, data: Dict[str, Any]) -> "ImageLayerMeta":
         """Construct ImageLayerMeta from dictionary."""
         return cls(
@@ -170,20 +182,24 @@ class ImageLayerMeta:
             affine_params=list(data["affine_params"]) if data.get("affine_params") else None,
         )
 
+    # 辞書互換の.get()メソッド。
     def get(self, key: str, default: Any = None) -> Any:
         """Dictionary-compatible .get() method."""
         return getattr(self, key, default)
 
+    # 辞書互換のインデックスアクセスを提供する。
     def __getitem__(self, key: str) -> Any:
         """Dictionary-compatible indexing."""
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
 
+    # 辞書互換のインデックス代入を提供する。
     def __setitem__(self, key: str, value: Any) -> None:
         """Dictionary-compatible assignment."""
         setattr(self, key, value)
 
+    # 辞書互換の'in'演算子を提供する。
     def __contains__(self, key: str) -> bool:
         """Dictionary-compatible 'in' operator."""
         return hasattr(self, key)
@@ -193,6 +209,7 @@ class ImageLayerMeta:
 LOCAL_CRS_PROJ = "+proj=tmerc +lat_0=0 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
 
 
+# 独自のローカル直交座標系(GRS80横メルカトル)を返す。
 def get_local_crs() -> QgsCoordinateReferenceSystem:
     """Return the custom local orthogonal CRS (GRS80 Transverse Mercator).
     # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
@@ -205,6 +222,7 @@ def get_local_crs() -> QgsCoordinateReferenceSystem:
 
 
 @contextmanager
+# QGISのCRS選択プロンプトを一時的に抑制するコンテキストマネージャ。
 def suppress_crs_prompt():
     """Context manager to temporarily suppress the QGIS CRS selection prompt.
 

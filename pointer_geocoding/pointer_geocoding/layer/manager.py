@@ -56,6 +56,7 @@ class LayerManager(
     layer_deleted = pyqtSignal(str)
     settings_changed = pyqtSignal(dict)
 
+    # LayerManagerの初期化。iface参照とセッション/レイヤー関連の状態、空間インデックス・キャッシュを初期値で構築する。
     def __init__(self, iface: Any = None) -> None:
         """Initialize LayerManager with an optional QgsInterface reference.
 
@@ -81,7 +82,23 @@ class LayerManager(
         self.geom_cache: Dict[int, QgsGeometry] = {}
         self._signals_connected: bool = False
 
+    # unload時に、シグナル接続・空間インデックス・キャッシュ・レイヤ参照を解放する(プロジェクトのレイヤは破棄せず、二重呼び出し可)。
+    def release_resources(self) -> None:
+        """Release signal connections, spatial index, caches and layer references (idempotent, no project data touched)."""
+        try:
+            self._disconnect_point_layer_signals()
+        except Exception:
+            pass
+        self._signals_connected = False
+        self.spatial_index = None
+        self.attr_cache.clear()
+        self.geom_cache.clear()
+        self.point_layer = None
+        self.ref_point_layer = None
+        self.raster_layer = None
+
     @property
+    # セッションのimage/ディレクトリパスを返す(未初期化時はNone)。
     def session_image_dir(self) -> Optional[str]:
         """Return path to the session image/ directory if session is initialized."""
         if self.session_dir:
@@ -89,12 +106,14 @@ class LayerManager(
         return None
 
     @property
+    # セッションのjson/ディレクトリパスを返す(未初期化時はNone)。
     def session_json_dir(self) -> Optional[str]:
         """Return path to the session json/ directory if session is initialized."""
         if self.session_dir:
             return os.path.join(self.session_dir, "json")
         return None
 
+    # 指定layer_nameを参照するpoint_layerのdrawing_name属性を空文字にクリアする。
     def clear_drawing_name_for_layer(self, layer_name: str) -> None:
         """Clear the drawing_name attribute on point_layer features referencing layer_name.
 
@@ -118,6 +137,7 @@ class LayerManager(
                 self.point_layer.changeAttributeValue(f.id(), idx, "")
         self.point_layer.commitChanges()
 
+    # point_layer上のdrawing_name属性をold_nameからnew_nameへ一括リネームする。
     def rename_drawing_name(self, old_name: str, new_name: str) -> None:
         """Rename the drawing_name attribute from old_name to new_name on point_layer.
 

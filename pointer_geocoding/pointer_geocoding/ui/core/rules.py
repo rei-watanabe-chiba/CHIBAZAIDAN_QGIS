@@ -22,6 +22,7 @@ class Rule(ABC):
     """
 
     @abstractmethod
+    # 構築済みBuiltPanelに対し、このルールの挙動(信号接続や行表示切替等)を結線する。
     def apply(self, panel) -> None:
         """Wire this rule's behavior onto an already-built BuiltPanel.
 

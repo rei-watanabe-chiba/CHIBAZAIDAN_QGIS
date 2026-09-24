@@ -9,17 +9,18 @@ loading, and project save.
 """
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
+import hashlib
 import os
 import shutil
-from typing import Optional, Tuple, Dict, Any, List
+import tempfile
+from typing import Optional, Tuple, Dict, Any
 
 from qgis.core import (
+    Qgis,
+    QgsMessageLog,
     QgsProject,
     QgsVectorLayer,
     QgsRasterLayer,
-    QgsFeature,
-    QgsGeometry,
-    QgsPointXY,
 )
 
 from .models import get_local_crs, suppress_crs_prompt
@@ -29,6 +30,7 @@ class SessionIOMixin:
     """Mixin providing session setup/loading, image/raster handling, and
     reference-point/project persistence for LayerManager."""
 
+    # 新規セッション用フォルダ構成・GeoPackage・QGISプロジェクトを自動生成する。
     def setup_new_session(
         self,
         parent_dir: str,
@@ -134,6 +136,7 @@ class SessionIOMixin:
         except Exception as e:
             return False, f"セッション構築中に例外が発生しました: {str(e)}", None
 
+    # ユーザー選択した図面画像をセッションのimageフォルダにコピーする。
     def copy_image_to_session(
         self, src_image_path: str, custom_name: Optional[str] = None
     ) -> Tuple[bool, str, str]:
@@ -173,6 +176,7 @@ class SessionIOMixin:
             return False, f"画像のコピーに失敗しました: {str(e)}", ""
 
     @staticmethod
+    # アフィンパラメータからESRI形式の6行ワールドファイル(tfw等)を生成する。
     def write_world_file(
         raster_path: str, affine_params: Tuple[float, float, float, float, float, float]
     ) -> Tuple[bool, str, str]:
@@ -232,6 +236,7 @@ class SessionIOMixin:
             return False, f"ワールドファイルの書き込みに失敗しました: {str(e)}", ""
 
     @staticmethod
+    # プレビュー表示用に、プロジェクトへは追加しない単体のラスタレイヤを読み込む。
     def load_preview_raster(image_path: str) -> Tuple[bool, str, Optional[QgsRasterLayer]]:
         """Load a standalone raster layer for display in a preview map canvas.
         # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
@@ -242,13 +247,61 @@ class SessionIOMixin:
             return False, f"画像ファイルが存在しません: {image_path}", None
 
         layer_name = os.path.splitext(os.path.basename(image_path))[0]
-        layer = QgsRasterLayer(image_path, f"プレビュー_{layer_name}")
+        source_path = SessionIOMixin._build_pixel_space_vrt(image_path) or image_path
+        layer = QgsRasterLayer(source_path, f"プレビュー_{layer_name}")
+        if not layer.isValid() and source_path != image_path:
+            QgsMessageLog.logMessage(
+                "ピクセル座標VRTの読み込みに失敗したため元画像を直接読み込みます。",
+                "PointerGeocoding",
+                Qgis.Warning,
+            )
+            layer = QgsRasterLayer(image_path, f"プレビュー_{layer_name}")
         if not layer.isValid():
             return False, f"プレビュー用画像の読み込みに失敗しました: {image_path}", None
 
         layer.setCrs(get_local_crs())
         return True, "", layer
 
+    @staticmethod
+    # ワールドファイルの影響を受けないピクセル座標基準の一時VRTを作成しパスを返す(失敗時は空文字)。
+    def _build_pixel_space_vrt(image_path: str) -> str:
+        """Create a deterministic temp VRT fixing georeferencing to pixel space
+        (X: 0..width, Y: -height..0). Returns '' on any failure."""
+        try:
+            from osgeo import gdal
+
+            src = gdal.Open(image_path)
+            if src is None:
+                raise RuntimeError("gdal.Open failed")
+            width, height = src.RasterXSize, src.RasterYSize
+            src = None
+
+            vrt_dir = os.path.join(tempfile.gettempdir(), "pointer_geocoding_preview")
+            os.makedirs(vrt_dir, exist_ok=True)
+            digest = hashlib.md5(
+                os.path.abspath(image_path).encode("utf-8")
+            ).hexdigest()
+            vrt_path = os.path.join(vrt_dir, f"{digest}.vrt")
+
+            ds = gdal.Translate(
+                vrt_path,
+                image_path,
+                format="VRT",
+                outputBounds=[0, 0, width, -height],
+            )
+            if ds is None:
+                raise RuntimeError("gdal.Translate failed")
+            ds = None
+            return vrt_path
+        except Exception as e:
+            QgsMessageLog.logMessage(
+                f"ピクセル座標VRTの作成に失敗したため元画像を直接読み込みます: {e}",
+                "PointerGeocoding",
+                Qgis.Warning,
+            )
+            return ""
+
+    # ジオリファレンス済み画像を「画像ファイル」グループ配下としてプロジェクトに読み込む。
     def load_georeferenced_raster(
         self, image_path: str, custom_layer_name: Optional[str] = None
     ) -> Tuple[bool, str, Optional[QgsRasterLayer]]:
@@ -292,39 +345,7 @@ class SessionIOMixin:
         project.write()
         return True, "画像をマップに配置しました。", raster_layer
 
-    def save_ref_points(self, ref_points_data: List[Dict[str, Any]]) -> bool:
-        """Persist reference point definitions into the GeoPackage ref_points layer.
-        # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
-        """
-        if not self.ref_point_layer or not self.ref_point_layer.isValid():
-            return False
-
-        self.ref_point_layer.startEditing()
-        # Clear existing reference points
-        existing_fids = [f.id() for f in self.ref_point_layer.getFeatures()]
-        if existing_fids:
-            self.ref_point_layer.deleteFeatures(existing_fids)
-
-        for i, rdata in enumerate(ref_points_data):
-            feat = QgsFeature(self.ref_point_layer.fields())
-            feat.setAttribute("ref_id", i + 1)
-            feat.setAttribute("ref_name", rdata.get("name", f"Ref-{i+1}"))
-            feat.setAttribute("canvas_x", rdata.get("pixel_x", 0.0))
-            feat.setAttribute("canvas_y", rdata.get("pixel_y", 0.0))
-            feat.setAttribute("target_x", rdata.get("real_x", 0.0))
-            feat.setAttribute("target_y", rdata.get("real_y", 0.0))
-            feat.setGeometry(
-                QgsGeometry.fromPointXY(
-                    QgsPointXY(float(rdata.get("real_x", 0.0)), float(rdata.get("real_y", 0.0)))
-                )
-            )
-            self.ref_point_layer.addFeature(feat)
-
-        self.ref_point_layer.commitChanges()
-        self.ref_point_layer.triggerRepaint()
-        QgsProject.instance().write()
-        return True
-
+    # 既存のQGISセッションプロジェクトを読み込み、ベクタ/ラスタレイヤを検出・復元する。
     def load_existing_session(
         self, session_dir: str, grid_config: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
@@ -447,6 +468,7 @@ class SessionIOMixin:
         except Exception as e:
             return False, f"既存セッション読み込み中に例外が発生しました: {str(e)}", None
 
+    # 現在のプロジェクトの変更内容をディスクに書き込む。
     def save_project(self) -> bool:
         """Write current project changes to disk.
 

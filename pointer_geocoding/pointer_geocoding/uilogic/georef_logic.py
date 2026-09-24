@@ -10,14 +10,13 @@ GUI（QMessageBox等）の操作は完全にViewへ移譲され、EventDispatche
 # 【変更不可侵の絶対的ルール】 測量座標系（X軸=南北, Y軸=東西）を採用。QGISキャンバス上のX座標(東西)はSurvey Y、Y座標(南北)はSurvey Xに対応する。
 
 import os
-import math
 from dataclasses import dataclass
 from typing import Optional, List, Tuple, Dict, Any
 
-from qgis.core import QgsProject, QgsPointXY
+from qgis.core import QgsProject, QgsRasterLayer
 from qgis.PyQt.QtCore import QObject
 
-from ..logic.transform import CoordinateTransformer
+from ..logic.transform import CoordinateTransformer, TransformError
 from ..logic.core import (
     to_survey_coords,
     from_survey_coords,
@@ -55,6 +54,7 @@ class GeorefLogic(QObject):
     INVALID_CHARS_PATTERN = r'[\\/:*?"<>|]'
     WORLD_FILE_EXTENSIONS = (".tfw", ".jgw", ".pgw", ".bpw", ".wld")
 
+    # GeorefLogicの初期化、DI依存の保持、DeleteLayerAction等のハンドラ登録とViewコールバックの初期値設定。
     def __init__(self, state_store, layer_manager, layers_dict, iface, dispatcher, parent=None):
         super().__init__(parent)
         self.state_store = state_store
@@ -74,16 +74,15 @@ class GeorefLogic(QObject):
         self.dispatcher.register_handler(ExportLayerAction, self.handle_export_layer)
 
         # View からのコールバック (DI)
-        self.get_image_dialog_cb = lambda: None
         self.is_focus_mode_active_cb = lambda: False
         self.update_symbology_opacity_cb = lambda: None
         self.ensure_drawing_selected_cb = lambda name: None
         self.ensure_drawing_visible_cb = lambda name: None
         self.update_drawing_combo_cb = lambda: None
 
+    # View層で解決されるべき操作（画像ダイアログ取得・フォーカスモード判定等）のコールバックを注入する。
     def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
         """View層で解決されるべき操作を注入する"""
-        self.get_image_dialog_cb = callbacks.get("get_image_dialog", self.get_image_dialog_cb)
         self.is_focus_mode_active_cb = callbacks.get("is_focus_mode_active", self.is_focus_mode_active_cb)
         self.update_symbology_opacity_cb = callbacks.get("update_symbology_opacity", self.update_symbology_opacity_cb)
         self.ensure_drawing_selected_cb = callbacks.get("ensure_drawing_selected", self.ensure_drawing_selected_cb)
@@ -94,23 +93,29 @@ class GeorefLogic(QObject):
     # View向けヘルパーメソッド（純粋計算・状態取得）
     # =========================================================================
 
+    # レイヤ編集中フラグ（_is_modifying_layer）を設定する。
     def set_modifying_layer(self, is_modifying: bool) -> None:
         self._is_modifying_layer = is_modifying
 
+    # レイヤ編集中フラグ（_is_modifying_layer）の現在値を返す。
     def is_modifying_layer(self) -> bool:
         return self._is_modifying_layer
 
+    # 測量座標から数学座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])
     def convert_to_math_coords(self, sx: float, sy: float) -> Tuple[float, float]:
         """測量座標から数学座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])"""
         return from_survey_coords(sx, sy)
 
+    # 数学座標から測量座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])
     def convert_to_survey_coords(self, math_x: float, math_y: float) -> Tuple[float, float]:
         """数学座標から測量座標への変換アダプタ呼び出し (ルール [RULE-GEO-01])"""
         return to_survey_coords(math_x, math_y)
 
+    # 基準点群とアフィン変換パラメータから残差サマリ（最大値・RMS等）を算出する。
     def get_residuals_summary(self, ref_points: List[Dict[str, Any]], affine_params: Tuple) -> Tuple[float, float]:
         return evaluate_residuals(ref_points, affine_params)
 
+    # 指定レイヤに属する打刻点が存在するかどうかを判定する。
     def check_layer_has_points(self, layer_name: str) -> bool:
         """指定レイヤに属する打刻点が存在するかどうかを返す"""
         if self.point_layer and self.point_layer.isValid() and "drawing_name" in self.point_layer.fields().names():
@@ -119,6 +124,7 @@ class GeorefLogic(QObject):
                     return True
         return False
 
+    # 編集対象レイヤのメタデータをロードし、画像パス探索・基準点整形を行って整合性を担保して返す。
     def load_edit_layer_metadata(self, layer_name: str) -> Optional[Dict[str, Any]]:
         """編集対象レイヤのメタデータをロードし、整合性を担保して返す"""
         meta = self.layer_manager.load_image_metadata()
@@ -139,101 +145,86 @@ class GeorefLogic(QObject):
         if not image_path:
             return None
             
-        affine_params = layer_meta.get("affine_params")
-        if affine_params is not None:
-            affine_params = tuple(affine_params)
-            
+        saved_params = layer_meta.get("affine_params")
+        if saved_params is not None:
+            saved_params = tuple(saved_params)
+
         ref_points = [{
             "name": r.get("name", ""),
             "pixel_x": r.get("pixel_x", 0.0),
             "pixel_y": r.get("pixel_y", 0.0),
-            "real_x": r.get("real_x", 0.0),
-            "real_y": r.get("real_y", 0.0),
+            "real_x": r.get("real_x"),
+            "real_y": r.get("real_y"),
         } for r in layer_meta.get("ref_points", [])]
-            
-        return {
+
+        result = {
             "image_path": image_path,
             "layer_name": layer_name,
             "ref_points": ref_points,
-            "affine_params": affine_params
         }
-
-    def show_preview_if_needed(self, on_point_clicked_cb) -> None:
-        """UIStateのパスに基づいてプレビューキャンバスを準備・表示する"""
-        state = self.state_store.state
-        if not state.current_copied_image_path or not os.path.isfile(state.current_copied_image_path):
-            return
-
-        image_dialog = self.get_image_dialog_cb()
-        if image_dialog and image_dialog.raster_layer is not None:
-            current_src = image_dialog.raster_layer.source()
-            if os.path.normcase(os.path.normpath(current_src)) != os.path.normcase(os.path.normpath(state.current_copied_image_path)):
-                self._create_preview_canvas(state.current_copied_image_path, on_point_clicked_cb)
-            else:
-                image_dialog.set_ref_points_data(state.ref_points_data)
-                image_dialog.show()
-                image_dialog.raise_()
-                image_dialog.activateWindow()
+        affine_params = self._resolve_loaded_affine(ref_points, saved_params)
+        if affine_params is not None:
+            result["affine_params"] = affine_params
         else:
-            self._create_preview_canvas(state.current_copied_image_path, on_point_clicked_cb)
+            result["clear_affine"] = True
+        return result
 
-    def _create_preview_canvas(self, image_path: str, on_point_clicked_cb) -> bool:
+    # 読込んだ基準点から再計算した変換と保存値を突き合わせ、採用すべき変換パラメータ（無ければNone）を返す。
+    def _resolve_loaded_affine(self, ref_points: List[Dict[str, Any]], saved_params: Optional[Tuple]) -> Optional[Tuple]:
+        def _is_num(v) -> bool:
+            return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+        if len(ref_points) < 2 or not all(_is_num(r.get("real_x")) and _is_num(r.get("real_y")) for r in ref_points):
+            return None
+
+        try:
+            local_pts = [(float(r["pixel_x"]), float(r["pixel_y"])) for r in ref_points]
+            real_pts = [(float(r["real_x"]), float(r["real_y"])) for r in ref_points]
+            recomputed = CoordinateTransformer.compute_affine_points(local_pts, real_pts)
+        except Exception:
+            return None
+        if recomputed is None:
+            return None
+
+        if saved_params is None:
+            return tuple(recomputed)
+
+        try:
+            sa, sb, sc, sd, se, sf = (float(v) for v in saved_params)
+            ra, rb, rc, rd, re_, rf = (float(v) for v in recomputed)
+        except Exception:
+            return None
+
+        max_diff = 0.0
+        for px, py in local_pts:
+            dx = (sa * px + sb * py + sc) - (ra * px + rb * py + rc)
+            dy = (sd * px + se * py + sf) - (rd * px + re_ * py + rf)
+            max_diff = max(max_diff, abs(dx), abs(dy))
+        if max_diff <= 1e-3:
+            return tuple(saved_params)
+        return None
+
+    # プレビュー用ラスタレイヤをロードして返す(失敗時はエラーをstateへ通知しNone)。
+    def prepare_preview_raster(self, image_path: str) -> Optional[QgsRasterLayer]:
         success, msg, raster_layer = self.layer_manager.load_preview_raster(image_path)
         if not success or raster_layer is None:
             self.state_store.dispatch(SetValidationAction(True, msg))
-            return False
+            return None
+        return raster_layer
 
-        image_dialog = self.get_image_dialog_cb()
-        if image_dialog:
-            ref_points_data = self.state_store.state.ref_points_data
-            image_dialog.setup_raster(raster_layer, on_point_clicked_cb, ref_points_data)
-            # setup_raster()冒頭のclean_up()で古いImageGeorefToolのマーカーは全消去され、
-            # 新規ImageGeorefToolにはset_ref_points_data()によるスナップ用データしか渡らない
-            # （マーカーシンボル自体は生成されない）ため、ここで明示的に再構築する。
-            for rdata in ref_points_data:
-                image_dialog.add_marker(rdata["pixel_x"], rdata["pixel_y"], rdata.get("name", ""))
-            image_dialog.show()
-            image_dialog.raise_()
-            image_dialog.activateWindow()
+    # 画像レイヤ名の一覧(メタデータのキー)を返す。
+    def get_image_layer_names(self) -> List[str]:
+        return list(self.layer_manager.load_image_metadata().keys())
 
-        return True
-
-    def find_snapped_ref_point(self, pixel_x: float, pixel_y: float) -> Optional[int]:
-        """プレビューキャンバス上でのクリック座標から、スナップ対象となる既存の基準点インデックスを返す"""
-        image_dialog = self.get_image_dialog_cb()
-        ref_points = self.state_store.state.ref_points_data
-        
-        if image_dialog and image_dialog.raster_layer and image_dialog.georef_tool:
-            tool = image_dialog.georef_tool
-            rlayer = image_dialog.raster_layer
-            extent = rlayer.extent()
-            w = float(rlayer.width())
-            h = float(rlayer.height())
-
-            if w > 0 and h > 0 and extent.width() > 0 and extent.height() > 0:
-                click_map_x = extent.xMinimum() + (pixel_x / w) * extent.width()
-                click_map_y = extent.yMaximum() - (pixel_y / h) * extent.height()
-                click_screen = tool.toCanvasCoordinates(QgsPointXY(click_map_x, click_map_y))
-
-                min_dist = float("inf")
-                snapped_index = None
-                for idx, rdata in enumerate(ref_points):
-                    rx = float(rdata["pixel_x"])
-                    ry = float(rdata["pixel_y"])
-                    r_map_x = extent.xMinimum() + (rx / w) * extent.width()
-                    r_map_y = extent.yMaximum() - (ry / h) * extent.height()
-                    r_screen = tool.toCanvasCoordinates(QgsPointXY(r_map_x, r_map_y))
-                    dist = math.hypot(click_screen.x() - r_screen.x(), click_screen.y() - r_screen.y())
-                    if dist <= 15.0 and dist < min_dist:
-                        min_dist = dist
-                        snapped_index = idx
-                return snapped_index
-        return None
+    # 指定名の画像レイヤがメタデータに存在するかを返す。
+    def image_layer_exists(self, layer_name: str) -> bool:
+        return layer_name in self.layer_manager.load_image_metadata()
 
     # =========================================================================
     # EventDispatcher Action Handlers (Heavy Logic & Persistence)
     # =========================================================================
 
+    # DeleteLayerActionを処理し、レイヤ削除・打刻点のdrawing_nameクリア・画像/ワールドファイル削除・メタデータ削除を行う。
     def handle_delete_layer(self, action: DeleteLayerAction) -> Optional[List[UIAction]]:
         layer_name = action.layer_name
 
@@ -262,15 +253,12 @@ class GeorefLogic(QObject):
 
             self.layer_manager.delete_image_metadata(layer_name)
 
-        image_dialog = self.get_image_dialog_cb()
-        if image_dialog is not None:
-            image_dialog.clean_up()
-
         if self.is_focus_mode_active_cb():
             self.update_symbology_opacity_cb()
             
         return []
 
+    # RenameLayerActionを処理し、重複チェック後にレイヤ名変更・メタデータ更新・drawing_name変更を行う。
     def handle_rename_layer(self, action: RenameLayerAction) -> Optional[List[UIAction]]:
         old_name = action.old_name
         new_name = action.new_name
@@ -297,19 +285,24 @@ class GeorefLogic(QObject):
 
         return [SetGeorefStateAction(layer_name=new_name, image_path=image_path)]
 
+    # ExecuteTransformActionを処理し、基準点群からアフィン変換パラメータを計算してUIStateへ反映する。
     def handle_execute_transform(self, action: ExecuteTransformAction) -> Optional[List[UIAction]]:
         state = self.state_store.state
         local_pts = [(float(r["pixel_x"]), float(r["pixel_y"])) for r in state.ref_points_data]
         real_pts = [(float(r["real_x"]), float(r["real_y"])) for r in state.ref_points_data]
 
-        affine_params = CoordinateTransformer.compute_affine_points(local_pts, real_pts, parent=self.parent_widget)
-        if affine_params is None:
-            return [SetValidationAction(True, "座標変換の計算に失敗しました。")]
+        try:
+            affine_params = CoordinateTransformer.compute_affine_points(local_pts, real_pts)
+        except TransformError as e:
+            return [SetValidationAction(True, str(e))]
 
         return [SetGeorefStateAction(affine_params=affine_params)]
 
+    # ExportLayerActionを処理し、画像のセッションディレクトリへのコピー・ワールドファイル書き込み・メタデータ更新・ジオリファレンス済みラスタのキャンバス配置を行う。
     def handle_export_layer(self, action: ExportLayerAction) -> Optional[List[UIAction]]:
         state = self.state_store.state
+        if state.calculated_affine_params is None:
+            return [SetValidationAction(True, "変換計算が未実行のため、レイヤ出力できません。")]
         layer_name = action.layer_name
         src_path = action.image_path
 

@@ -55,6 +55,8 @@ class ButtonDef:
     style_variant: Optional[str] = None
     enabled: bool = True
     stretch: int = 1
+    #: icon/ 配下のアイコンファイル名(例: "search.svg")。指定時はプラグイン直下 icon/ を絶対パスで解決して setIcon する。
+    icon: Optional[str] = None
 
 
 @dataclass
@@ -104,6 +106,8 @@ class FieldSpec:
     sub_fields: List["FieldSpec"] = field(default_factory=list)
     stretch: int = 1
     label_width: Optional[int] = None
+    #: LINEEDIT_ROW 用。trailing_button がある場合の入力欄stretchの上書き値(未指定時は従来の6)。
+    lineedit_stretch: Optional[int] = None
 
     # --- 新規追加 (アプローチB) ---
     #: CHECKBOX_ROW または checkable な LIST_WIDGET 用。初期状態でチェックを入れるインデックスのリスト。

@@ -24,6 +24,7 @@ class FilterLogic(QObject):
     """
     レイヤ可視性制御を担う純粋なControllerクラス。
     """
+    # FilterLogicの初期化、Controllerに必要な各種オブジェクトの保持とアクションハンドラの登録。
     def __init__(
         self,
         state_store: UIStateStore,
@@ -56,6 +57,7 @@ class FilterLogic(QObject):
     # Action Handlers (イベントディスパッチャ対応)
     # =========================================================================
 
+    # 基準点レイヤの表示/非表示を切り替えるアクションハンドラ。
     def handle_ref_point_visibility(self, action: ChangeRefPointVisibilityAction) -> Optional[List[UIAction]]:
         """
         基準点レイヤの表示/非表示を切り替えるアクションハンドラ。
@@ -79,6 +81,7 @@ class FilterLogic(QObject):
                 
         return []
 
+    # 図面選択テーブルのチェックボックス操作に伴い、対象の画像レイヤの可視性を切り替えるアクションハンドラ。
     def handle_drawing_visibility(self, action: ChangeDrawingVisibilityAction) -> Optional[List[UIAction]]:
         """
         図面選択テーブルのチェックボックス操作に伴い、

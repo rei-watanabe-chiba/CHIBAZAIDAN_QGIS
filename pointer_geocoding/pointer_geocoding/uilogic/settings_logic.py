@@ -43,6 +43,7 @@ class SettingsLogic(QObject):
     """
     環境設定ダイアログの制御・シンボロジ同期を担うControllerクラス。
     """
+    # SettingsLogicの初期化、layer_manager/iface/dispatcherの保持とView連携コールバックの初期化。
     def __init__(self, layer_manager: Any, iface: Any, dispatcher: Any, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self.layer_manager = layer_manager
@@ -58,6 +59,7 @@ class SettingsLogic(QObject):
         self.set_panel_value_cb: Callable[[str, Any], None] = lambda f, v: None
         self.set_widget_enabled_cb: Callable[[str, bool], None] = lambda w, e: None
 
+    # View層から必要な情報取得メソッドやGUI操作ヘルパーをバインドする。
     def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
         """View層から必要な情報取得メソッドやGUI操作ヘルパーをバインドする"""
         self.is_focus_mode_active_cb = callbacks.get("is_focus_mode_active", self.is_focus_mode_active_cb)
@@ -66,6 +68,7 @@ class SettingsLogic(QObject):
         self.set_panel_value_cb = callbacks.get("set_panel_value", self.set_panel_value_cb)
         self.set_widget_enabled_cb = callbacks.get("set_widget_enabled", self.set_widget_enabled_cb)
 
+    # EventDispatcherに対し、自身が担当するActionのハンドラを登録する。
     def register_handlers(self) -> None:
         """EventDispatcher に対し、自身が担当する Action のハンドラを登録する"""
         self.dispatcher.register_handler(ApplySettingsAction, self._handle_apply_settings)
@@ -76,6 +79,7 @@ class SettingsLogic(QObject):
     # イベントハンドラ (Action Execution)
     # =========================================================================
 
+    # カラーピッカーを起動し、選択された色をViewにセットする。
     def _handle_pick_color(self, action: PickColorAction) -> Optional[List[UIAction]]:
         """カラーピッカーを起動し、選択された色をViewにセットする"""
         new_color = self.open_color_dialog_cb(action.current_color)
@@ -83,12 +87,14 @@ class SettingsLogic(QObject):
             self.set_panel_value_cb(action.field_id, new_color)
         return []
 
+    # スケールの有効/無効状態をViewに連動させる。
     def _handle_scale_mode_changed(self, action: ChangeScaleModeAction) -> Optional[List[UIAction]]:
         """スケールの有効/無効状態をViewに連動させる"""
         widget_id = "major_scale_value" if action.scale_type == "major" else "minor_scale_value"
         self.set_widget_enabled_cb(widget_id, action.is_active)
         return []
 
+    # UIから取得した設定値(PluginSettings DTO)を永続化し、シンボロジを一括更新する。
     def _handle_apply_settings(self, action: ApplySettingsAction) -> Optional[List[UIAction]]:
         """UIから取得した設定値(PluginSettings DTO)を永続化し、シンボロジを一括更新する"""
         if not self.layer_manager or not self.layer_manager.session_dir:
@@ -134,6 +140,7 @@ class SettingsLogic(QObject):
     # データ同期 (初期化時ロード)
     # =========================================================================
 
+    # 起動時やダイアログ表示時に、永続化された設定データを読み込みUIコンポーネントへ反映する。
     def load_initial_settings(self, *args) -> None:
         """
         起動時やダイアログ表示時に、永続化された設定データを読み込みUIコンポーネントへ反映する。

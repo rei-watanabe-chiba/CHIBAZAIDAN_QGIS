@@ -27,6 +27,7 @@ class GridCsvMixin:
     """Mixin providing grid CSV generation/deployment and in-memory loading for LayerManager."""
 
     @classmethod
+    # 指定範囲の全小グリッド座標を算出し、PointGeo_grid.csvとして書き出す。
     def generate_grid_csv(
         cls,
         output_path: str,
@@ -89,6 +90,7 @@ class GridCsvMixin:
             return False, f"グリッドCSVの生成に失敗しました: {str(e)}"
 
     @classmethod
+    # 既存CSVのコピーまたは自動生成により、セッションディレクトリにグリッドCSVを配置する。
     def setup_or_copy_grid_csv(
         cls, session_dir: str, grid_config: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
@@ -142,6 +144,7 @@ class GridCsvMixin:
                 dest_path, origin_x, origin_y, range_x_min, range_x_max, range_y_min, range_y_max
             )
 
+    # グリッドCSVをメモリキャッシュへ読み込み、基準点レイヤ(ref_points)を構築する。
     def load_grid_csv_to_memory(self, csv_path: Optional[str] = None) -> bool:
         """Load PointGeo_grid.csv into memory cache.
 

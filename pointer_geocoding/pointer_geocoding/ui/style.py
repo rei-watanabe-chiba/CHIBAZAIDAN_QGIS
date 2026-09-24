@@ -33,6 +33,7 @@ class UIStyleHelper:
     """
 
     @classmethod
+    # QGISのライト/ダークテーマ双方に対応したQSSスタイルシートを生成する。
     def get_style_sheet(cls) -> str:
         """Generate a theme-agnostic QSS stylesheet referencing Qt palette roles.
 
@@ -83,6 +84,21 @@ class UIStyleHelper:
             border: 1.5px solid palette(highlight);
         }
 
+        /* Disabled inputs: neutral translucent gray (theme-independent).
+           QDoubleSpinBox keeps the native look; QSpinBox has its own
+           :disabled rule below, next to its other rules (see Core §5-2). */
+        QLineEdit:disabled, QgsFilterLineEdit:disabled, QComboBox:disabled {
+            background-color: rgba(128, 128, 128, 0.18);
+            color: palette(disabled-text);
+        }
+
+        /* Point-name search input inside the status panel: 30% white so the
+           panel color shows through. Declared after :disabled so it wins on
+           equal specificity (also while the whole dock is disabled). */
+        QgsFilterLineEdit[searchInput="true"], QgsFilterLineEdit[searchInput="true"]:disabled {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
         /* QSpinBox base styling. NOTE: only the outer box and the
            up/down button sub-control geometry are styled here; arrow
            glyphs are handled separately below. */
@@ -101,6 +117,14 @@ class UIStyleHelper:
 
         QSpinBox:focus {
             border: 1.5px solid palette(highlight);
+        }
+
+        /* Disabled QSpinBox: same neutral gray as the other disabled inputs
+           above. A disabled widget has no focus border, so the Core §5-2
+           item 4 conflict concern (clash with the focus frame) does not
+           apply. Only background-color is set; text color is left as is. */
+        QSpinBox:disabled {
+            background-color: rgba(128, 128, 128, 0.18);
         }
 
         /* up-button/down-button each declare their own subcontrol-position;
@@ -189,6 +213,30 @@ class UIStyleHelper:
         QPushButton:disabled {
             opacity: 0.5;
             color: palette(disabled-text);
+        }
+
+        /* Plain Buttons (base-colored background while enabled) */
+        QPushButton[plain="true"]:enabled {
+            background-color: palette(base);
+        }
+
+        QPushButton[plain="true"]:enabled:hover {
+            background-color: rgba(128, 128, 128, 0.15);
+        }
+
+        QPushButton[plain="true"]:enabled:pressed {
+            background-color: rgba(128, 128, 128, 0.28);
+        }
+
+        /* Filter Toggle Button (blue while checked; border/padding inherited) */
+        QPushButton[filterToggle="true"]:checked {
+            background-color: #1976D2;
+            color: #FFFFFF;
+            font-weight: bold;
+        }
+
+        QPushButton[filterToggle="true"]:checked:hover {
+            background-color: #1565C0;
         }
 
         /* Tab Widget Styling */
@@ -329,6 +377,29 @@ class UIStyleHelper:
             border: 1px solid rgba(0, 0, 0, 0.1);
             font-weight: bold;
         }
+
+        QPushButton[segmentedButton="true"]:disabled {
+            color: palette(disabled, text);
+        }
+
+        /* Segmented Toggle checked tones (same dark colors as the info-panel statusType left border) */
+        QPushButton[segmentedButton="true"][segmentTone="info"]:checked {
+            background-color: #1976D2;
+            color: #FFFFFF;
+        }
+
+        QPushButton[segmentedButton="true"][segmentTone="warning"]:checked {
+            background-color: #F57C00;
+            color: #FFFFFF;
+        }
+
+        QPushButton[segmentedButton="true"][segmentTone="info"]:checked:hover {
+            background-color: #1565C0;
+        }
+
+        QPushButton[segmentedButton="true"][segmentTone="warning"]:checked:hover {
+            background-color: #E65100;
+        }
         """.replace("__UP_ARROW_PATH__", up_arrow_path).replace(
             "__DOWN_ARROW_PATH__", down_arrow_path
         ).replace("__UP_ARROW_PRESSED_PATH__", up_arrow_pressed_path).replace(
@@ -336,6 +407,7 @@ class UIStyleHelper:
         )
 
     @staticmethod
+    # QMessageBox.critical()呼び出しをまとめたエラーダイアログ表示のラッパー。
     def show_error_dialog(parent: Optional[QWidget], title: str, message: str) -> None:
         """Thin wrapper around QMessageBox.critical() to consolidate error dialog presentation.
 
@@ -349,6 +421,7 @@ class UIStyleHelper:
         QMessageBox.critical(parent, title, message)
 
     @staticmethod
+    # QMessageBox.warning()呼び出しをまとめた警告ダイアログ表示のラッパー。
     def show_warning_dialog(parent: Optional[QWidget], title: str, message: str) -> None:
         """Thin wrapper around QMessageBox.warning() to consolidate warning dialog presentation.
 
@@ -362,6 +435,7 @@ class UIStyleHelper:
         QMessageBox.warning(parent, title, message)
 
     @classmethod
+    # 対象ウィジェットとその子階層にテーマ非依存のスタイルを適用する。
     def apply_theme(cls, widget: QWidget) -> None:
         """Apply theme-agnostic styling to the target widget and polish its hierarchy.
 
@@ -372,6 +446,7 @@ class UIStyleHelper:
             widget.setStyleSheet(cls.get_style_sheet())
 
     @staticmethod
+    # ネイティブ矢印コントロール付きの標準化されたQSpinBoxを生成する。
     def create_spinbox(
         min_val: int = 0,
         max_val: int = 999999,
@@ -397,6 +472,7 @@ class UIStyleHelper:
         return spin
 
     @staticmethod
+    # 左端に色分けボーダーを持つフラットデザインのステータスパネルを生成する。
     def create_status_panel(
         text: str = "",
         status_type: str = "info",
@@ -429,6 +505,7 @@ class UIStyleHelper:
         return frame, label
 
     @staticmethod
+    # 既存のステータスパネルコンテナのテキストと状態別スタイルを更新する。
     def update_status_panel(
         frame: QFrame,
         label: QLabel,
@@ -452,24 +529,52 @@ class UIStyleHelper:
         frame.style().polish(frame)
 
     @staticmethod
+    # QPushButtonをプライマリアクションボタンとしてマークする。
     def set_primary_button(button: QPushButton) -> None:
         """Mark a QPushButton as a primary action button."""
         button.setProperty("primary", True)
         button.style().polish(button)
 
     @staticmethod
+    # QPushButtonを成功/保存アクションボタンとしてマークする。
     def set_success_button(button: QPushButton) -> None:
         """Mark a QPushButton as a success/save action button."""
         button.setProperty("success", True)
         button.style().polish(button)
 
     @staticmethod
+    # QPushButtonをアクセント/エクスポートアクションボタンとしてマークする。
     def set_accent_button(button: QPushButton) -> None:
         """Mark a QPushButton as an accent/export action button."""
         button.setProperty("accent", True)
         button.style().polish(button)
 
     @staticmethod
+    # QPushButtonを有効時に背景がベース色(白系)になるボタンとしてマークする。
+    def set_plain_button(button: QPushButton) -> None:
+        """Mark a QPushButton as a plain button (base-colored background while enabled)."""
+        button.setProperty("plain", True)
+        button.style().unpolish(button)
+        button.style().polish(button)
+
+    @staticmethod
+    # QPushButtonをフィルターON/OFFトグルボタン(ON時に青背景)としてマークする。
+    def set_filter_button(button: QPushButton) -> None:
+        """Mark a QPushButton as a filter toggle (blue background while checked)."""
+        button.setProperty("filterToggle", True)
+        button.style().unpolish(button)
+        button.style().polish(button)
+
+    @staticmethod
+    # セグメントトグルボタンに選択中の色調("info"/"warning")プロパティを設定する。
+    def set_segment_tone(button: QPushButton, tone: str) -> None:
+        """Set the checked-state tone ("info"/"warning") of a segmented toggle button."""
+        button.setProperty("segmentTone", tone)
+        button.style().unpolish(button)
+        button.style().polish(button)
+
+    @staticmethod
+    # バナーQLabelに動的なステータス種別プロパティを設定する。
     def set_banner_status(label: QLabel, status: str) -> None:
         """Set dynamic status property on a banner QLabel ('info', 'success', 'warning').
 
@@ -481,12 +586,14 @@ class UIStyleHelper:
         label.style().polish(label)
 
     @staticmethod
+    # QFrameをステータスパネルとしてマークする。
     def set_status_panel(frame: QWidget) -> None:
         """Mark a QFrame as a status panel."""
         frame.setProperty("statusPanel", True)
         frame.style().polish(frame)
 
     @staticmethod
+    # 入力ウィジェットに赤いエラー強調ボーダーを付与/解除する。
     def set_error_border(widget: QWidget, has_error: bool) -> None:
         """Apply/remove a red error-highlight border on an input widget.
 
@@ -503,6 +610,7 @@ class UIStyleHelper:
         widget.setStyleSheet("border: 2px solid #C62828;" if has_error else "")
 
     @staticmethod
+    # 任意の太字タイトル付きセパレータウィジェットを構築する。
     def build_separator(
         parent: Optional[QWidget] = None, title_text: Optional[str] = None
     ) -> QWidget:
@@ -539,6 +647,7 @@ class UIStyleHelper:
 
 
     @staticmethod
+    # チェック可能なQToolButtonを左アイコンレールのナビゲーションボタンとしてマークする。
     def set_nav_button(button: QWidget) -> None:
         """Mark a checkable QToolButton as a left icon-rail navigation button.
 
@@ -549,6 +658,7 @@ class UIStyleHelper:
         button.style().polish(button)
 
     @staticmethod
+    # メインラベルと要素コンテナから成る標準化されたフレックス風の横並び行を構築する。
     def build_flex_row(
         main_label: Optional[QLabel],
         child_configs: list,
@@ -577,7 +687,7 @@ class UIStyleHelper:
         label_stretch, content_stretch = main_ratio
         if main_label is not None:
             row_layout.addWidget(main_label, label_stretch)
-        else:
+        elif label_stretch > 0:
             row_layout.addStretch(label_stretch)
 
         content_widget = QWidget(row_widget)
@@ -596,6 +706,7 @@ class UIStyleHelper:
         return row_widget
 
     @staticmethod
+    # サブラベルと入力ウィジェットを組み合わせたサブコンテナを構築する。
     def build_child_container(
         sub_label: Optional[QLabel],
         input_widget: QWidget,
@@ -621,6 +732,7 @@ class UIStyleHelper:
         return container
 
     @staticmethod
+    # プレーンテキストのラベルと単一の入力ウィジェットを組み合わせたフォーム行を構築する。
     def build_form_row(
         label_text: str,
         widget: QWidget,
@@ -662,6 +774,7 @@ class UIStyleHelper:
         return container
 
     @staticmethod
+    # 設定グループを視覚的に区切るための太字セクションヘッダーQLabelを構築する。
     def build_section_header(title: str) -> QLabel:
         """Build a bold section header QLabel used to visually separate settings groups.
 
@@ -677,6 +790,7 @@ class UIStyleHelper:
         return header
 
     @staticmethod
+    # シグナルをブロックしながらQComboBoxを文字列リストでクリア・再構築する。
     def repopulate_combo_box(
         combo: QComboBox,
         items: List[str],
@@ -713,6 +827,7 @@ class UIStyleHelper:
         combo.blockSignals(False)
 
     @staticmethod
+    # シグナルをブロックしながらQListWidgetをチェック可能な項目でクリア・再構築する。
     def repopulate_checkable_list(
         list_widget: QListWidget,
         entries: List[Tuple[str, Any, bool]],
@@ -735,6 +850,7 @@ class UIStyleHelper:
         list_widget.blockSignals(False)
 
     @staticmethod
+    # チェック可能なQListWidgetItemから(ユーザーデータ, チェック有無)を取得する。
     def get_checkable_item_state(item: QListWidgetItem) -> Tuple[Any, bool]:
         """Extract (user_data, is_checked) from a checkable QListWidgetItem.
 
@@ -749,6 +865,7 @@ class UIStyleHelper:
         return item.data(Qt.UserRole), (item.checkState() == Qt.Checked)
 
     @staticmethod
+    # シグナルをブロックしながらQTableWidgetの行をデータソースからクリア・再構築する。
     def rebuild_table_rows(
         table: QTableWidget,
         row_count: int,
@@ -778,6 +895,7 @@ class UIStyleHelper:
         table.blockSignals(False)
 
     @staticmethod
+    # ベクタレイヤのフィールドから抽出した一意なソート済み値でQComboBoxを構築する。
     def populate_combo_from_layer_field(
         combo: QComboBox,
         layer: Any,
@@ -820,6 +938,7 @@ class UIStyleHelper:
         combo.blockSignals(False)
 
     @staticmethod
+    # ダイアログのアクションボタン用に中央揃え・等幅の行レイアウトを構築する。
     def build_centered_button_row(
         buttons: List[QPushButton],
         spacing: int = 12,
@@ -851,6 +970,7 @@ class UIStyleHelper:
         return row_layout
 
     @staticmethod
+    # iOS風のセグメント化トグルボタングループを構築する。
     def build_segmented_toggle(
         options: List[str], default_index: int = 0, parent: Optional[QWidget] = None
     ) -> Tuple[QWidget, List[QPushButton]]:
