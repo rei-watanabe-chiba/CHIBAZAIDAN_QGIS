@@ -52,6 +52,7 @@ class StartDialogLogic(QObject):
     """
     INVALID_CHARS_PATTERN = r'[\\/:*?"<>|]'
 
+    # コントローラの初期化、UIコンポーネント参照とコールバックの初期値を設定する。
     def __init__(self, parent: Optional[QObject] = None):
         super().__init__(parent)
         self.parent_widget = parent
@@ -75,6 +76,7 @@ class StartDialogLogic(QObject):
         self.apply_grid_mode_state_cb = lambda: None
         self.show_warning_dialog_cb = lambda title, msg: None
 
+    # View層のUIコンポーネント参照とコールバック関数をバインドする。
     def bind_ui(self, ui_refs: Dict[str, Any], callbacks: Dict[str, Callable]) -> None:
         """View層のUIコンポーネントとコールバックをバインドする"""
         self.radio_new = ui_refs.get("radio_new")
@@ -98,6 +100,7 @@ class StartDialogLogic(QObject):
     # イベントハンドラ
     # =========================================================================
 
+    # 新規/既存セッションのラジオボタン切替に応じて、フォルダラベル・プレースホルダ・入力欄の有効状態を更新する。
     def handle_session_type_changed(self) -> None:
         is_new = self.radio_new.isChecked()
         if is_new:
@@ -117,6 +120,7 @@ class StartDialogLogic(QObject):
                 if os.path.isfile(potential_csv) and not self.edit_grid_csv.text().strip():
                     self.edit_grid_csv.setText(os.path.normpath(potential_csv))
 
+    # フォルダ選択ダイアログを開き、選択されたパスをフォルダ入力欄に反映する。
     def handle_browse_folder(self) -> None:
         is_new = self.radio_new.isChecked()
         dialog_title = LogicConstants.BROWSE_FOLDER_NEW if is_new else LogicConstants.BROWSE_FOLDER_EXISTING
@@ -133,6 +137,7 @@ class StartDialogLogic(QObject):
                 if os.path.isfile(potential_csv):
                     self.edit_grid_csv.setText(potential_csv)
 
+    # グリッドCSVファイル選択ダイアログを開き、選択されたファイルパスをCSV入力欄に反映する。
     def handle_browse_grid_csv(self) -> None:
         current_csv = self.edit_grid_csv.text().strip()
         start_dir = ""
@@ -156,6 +161,7 @@ class StartDialogLogic(QObject):
     # ロジック計算
     # =========================================================================
 
+    # グリッドCSVを読み込み、原点座標・グリッド範囲・データ行数などのメタデータを抽出する。
     def extract_csv_metadata(self, csv_path: str) -> Optional[Dict[str, int]]:
         if not os.path.isfile(csv_path):
             return None
@@ -234,6 +240,7 @@ class StartDialogLogic(QObject):
                 continue
         return None
 
+    # CSV利用モードでない場合に、グリッドX/Y範囲の最小値が最大値を超えていないか判定する。
     def is_range_invalid(self) -> bool:
         if self.radio_grid_mode_use_csv.isChecked() and self.edit_grid_csv.text().strip():
             return False
@@ -242,6 +249,7 @@ class StartDialogLogic(QObject):
             or self.spin_range_y_min.value() > self.spin_range_y_max.value()
         )
 
+    # CSV利用モードかグリッド範囲指定モードかに応じて、期待されるデータ行数を計算する。
     def compute_expected_row_count(self, csv_row_count: Optional[int]) -> int:
         if self.radio_grid_mode_use_csv.isChecked() and self.edit_grid_csv.text().strip():
             return csv_row_count if csv_row_count is not None else 0
@@ -254,6 +262,7 @@ class StartDialogLogic(QObject):
             return 0
         return (x_max - x_min + 1) * (y_max - y_min + 1) * 100
 
+    # フォルダパス・セッション名・既存セッションの重複や.qgz有無など、開始前の入力値を検証する。
     def validate_inputs(self) -> bool:
         folder_path = self.edit_folder.text().strip()
 

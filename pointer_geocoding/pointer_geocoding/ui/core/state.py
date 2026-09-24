@@ -12,8 +12,15 @@ class UIState:
     
     # 2. 選択・編集状態
     selected_point_id: Optional[int] = None
+    selected_point_data: Optional[Dict[str, Any]] = None  # 編集モードで選択中の既設点データ
+    # エリア選択(Shift+ドラッグ)による複数選択のID列。単点選択(selected_point_id)とは排他。
+    selected_point_ids: Tuple[int, ...] = ()
     has_digitized_with_branch: bool = False
     selected_drawing_name: str = ""
+    # 点名検索の状態(ヒットはIDのみ保持。データ本体は持たない)
+    search_hit_ids: Tuple[int, ...] = ()
+    search_index: int = -1
+    search_query: str = ""
 
     # 3. 制御フラグ
     has_input_error: bool = False
@@ -46,6 +53,11 @@ class UIState:
     # 8. 出力 (Tab4) 状態
     output_encoding: int = 0  # 0: UTF-8, 1: Shift-JIS
     output_csv_path: str = ""
+
+    # 変換パラメータが計算済み（変換済み）かどうかを返す。
+    @property
+    def is_transformed(self) -> bool:
+        return self.calculated_affine_params is not None
 
 class UIAction:
     """状態更新の意図を表現する基底クラス"""
@@ -84,6 +96,7 @@ class SetGeorefStateAction(UIAction):
     affine_params: Optional[Tuple[float, float, float, float, float, float]] = None
     ref_points: Optional[List[Dict[str, Any]]] = None
     clear_ref_points: bool = False
+    clear_affine: bool = False
 
 # ==========================================
 # 表示制御・フィルター系 Action
@@ -124,6 +137,30 @@ class ResetSelectionAction(UIAction):
     pass
 
 @dataclass
+class SelectPointAction(UIAction):
+    """編集モードで既設点が選択されたことを表すAction(選択点のID・データ・INFO要約を保持)"""
+    point_id: int
+    data: Dict[str, Any]
+    summary: Dict[str, str]
+
+@dataclass
+class SelectPointsAction(UIAction):
+    """編集モードでエリア選択された複数の既設点IDを状態へ反映するAction(既存の選択は置換される)"""
+    point_ids: Tuple[int, ...]
+
+@dataclass
+class SetPointSearchAction(UIAction):
+    """点名検索の結果(ヒットID列・現在index・検索文字列)を状態へ反映するAction"""
+    hit_ids: Tuple[int, ...]
+    index: int
+    query: str
+
+@dataclass
+class ClearPointSearchAction(UIAction):
+    """点名検索状態をデフォルトへ戻すAction"""
+    pass
+
+@dataclass
 class SetProcessingAction(UIAction):
     is_processing: bool
 
@@ -161,14 +198,22 @@ class AddManualDigitizedPointAction(UIAction):
 
 @dataclass
 class DeletePointAction(UIAction):
-    """指定されたIDの点を削除するAction"""
-    feature_id: int
+    """指定されたIDの点を削除するAction(feature_id単体、またはfeature_ids複数のいずれか)"""
+    feature_id: Optional[int] = None
+    feature_ids: Optional[List[int]] = None
 
 @dataclass
 class UpdatePointAttributesAction(UIAction):
-    """既存点の属性を更新するAction"""
+    """既存点の属性を更新するAction(feature_id単体、またはfeature_ids複数のいずれか)"""
+    feature_id: Optional[int] = None
+    updates: Dict[str, Any] = field(default_factory=dict)
+    feature_ids: Optional[List[int]] = None
+
+@dataclass
+class MovePointAction(UIAction):
+    """既存点をキャンバス上の指定位置へ移動するAction"""
     feature_id: int
-    updates: Dict[str, Any]
+    map_point: Any  # QgsPointXY
 
 @dataclass
 class UpdateFeatureCategoryAction(UIAction):
@@ -189,23 +234,46 @@ class ChangeDrawingVisibilityAction(UIAction):
     is_visible: bool
 
 
+# 点名検索フィールドのデフォルト値(選択変更・モード切替時の自動解除に使用)。
+_SEARCH_DEFAULTS: Dict[str, Any] = {"search_hit_ids": (), "search_index": -1, "search_query": ""}
+# 複数選択のデフォルト値(単点選択・モード切替・検索・リセット時の自動解除に使用)。
+_MULTI_SELECT_DEFAULTS: Dict[str, Any] = {"selected_point_ids": ()}
+
+
+# 基準点リストの件数または座標(pixel/real)が異なるかを判定する(nameのみの違いは無視)。
+def _ref_points_geometry_changed(old_refs: Optional[List[Dict[str, Any]]], new_refs: List[Dict[str, Any]]) -> bool:
+    old_refs = old_refs or []
+    if len(old_refs) != len(new_refs):
+        return True
+    for old_p, new_p in zip(old_refs, new_refs):
+        for key in ("pixel_x", "pixel_y", "real_x", "real_y"):
+            if old_p.get(key) != new_p.get(key):
+                return True
+    return False
+
+
 class UIStateStore(QObject):
     state_changed = pyqtSignal(object, dict)
 
+    # UIStateStoreの初期化、初期UIStateの生成。
     def __init__(self, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self._state = UIState()
 
     @property
+    # 現在保持しているUIStateを取得するプロパティ。
     def state(self) -> UIState:
         return self._state
 
+    # state_changedシグナルを発行せずにActionを適用する。
     def dispatch_silent(self, action: UIAction) -> None:
         self._apply_action(action, emit_signal=False)
 
+    # Actionを適用し、変更差分をstate_changedシグナルで通知する。
     def dispatch(self, action: UIAction) -> None:
         self._apply_action(action, emit_signal=True)
 
+    # 複数のUIActionを一括適用し、変更差分を統合して1回のみstate_changedシグナルを発行する。
     def dispatch_batch(self, actions: List[UIAction]) -> None:
         """
         複数のUIActionを一括適用し、変更差分を統合して1回のみ state_changed シグナルを発行する。
@@ -223,6 +291,7 @@ class UIStateStore(QObject):
         if all_diff:
             self.state_changed.emit(self._state, all_diff)
 
+    # アクションの種類ごとにUIStateへの反映内容を判定し、状態更新と差分算出を行う。
     def _apply_action(self, action: UIAction, emit_signal: bool = True) -> dict:
         """
         アクションを現在の状態に適用し、差分を返す。
@@ -235,6 +304,8 @@ class UIStateStore(QObject):
             new_state_kwargs['tab1_mode'] = action.mode
         elif isinstance(action, ChangeTab2ModeAction):
             new_state_kwargs['tab2_mode'] = action.mode
+            new_state_kwargs.update(_SEARCH_DEFAULTS)
+            new_state_kwargs.update(_MULTI_SELECT_DEFAULTS)
         elif isinstance(action, ChangeAutonumModeAction):
             new_state_kwargs['autonum_mode'] = action.mode
         elif isinstance(action, SetDigitizedWithBranchAction):
@@ -250,6 +321,10 @@ class UIStateStore(QObject):
                 new_state_kwargs['confirmed_layer_name'] = action.layer_name
             if action.affine_params is not None:
                 new_state_kwargs['calculated_affine_params'] = action.affine_params
+            elif action.clear_affine:
+                new_state_kwargs['calculated_affine_params'] = None
+            elif action.ref_points is not None and _ref_points_geometry_changed(self._state.ref_points_data, action.ref_points):
+                new_state_kwargs['calculated_affine_params'] = None
             if action.ref_points is not None:
                 new_state_kwargs['ref_points_data'] = action.ref_points
             elif action.clear_ref_points:
@@ -290,9 +365,48 @@ class UIStateStore(QObject):
             if action.csv_path is not None:
                 new_state_kwargs['output_csv_path'] = action.csv_path
             
+        # 既設点の選択(編集モード)
+        elif isinstance(action, SelectPointAction):
+            new_state_kwargs['selected_point_id'] = action.point_id
+            new_state_kwargs['selected_point_data'] = dict(action.data)
+            new_state_kwargs['point_info_summary'] = dict(action.summary)
+            new_state_kwargs['is_out_of_bounds'] = False
+            new_state_kwargs['point_info_has_error'] = False
+            new_state_kwargs['has_input_error'] = False
+            new_state_kwargs['status_message'] = ""
+            new_state_kwargs['error_focus_field'] = None
+            new_state_kwargs.update(_SEARCH_DEFAULTS)
+            new_state_kwargs.update(_MULTI_SELECT_DEFAULTS)
+
+        # 既設点の複数選択(エリア選択)。単点選択とは排他で、常に既存選択を置換する
+        elif isinstance(action, SelectPointsAction):
+            new_state_kwargs['selected_point_ids'] = tuple(action.point_ids)
+            new_state_kwargs['selected_point_id'] = None
+            new_state_kwargs['selected_point_data'] = None
+            new_state_kwargs['point_info_summary'] = {"group": "-", "pointname": "-", "coords": "-"}
+            new_state_kwargs['is_out_of_bounds'] = False
+            new_state_kwargs['point_info_has_error'] = False
+            new_state_kwargs['has_input_error'] = False
+            new_state_kwargs['status_message'] = ""
+            new_state_kwargs['error_focus_field'] = None
+            new_state_kwargs.update(_SEARCH_DEFAULTS)
+
+        # 点名検索状態の反映・解除
+        elif isinstance(action, SetPointSearchAction):
+            new_state_kwargs.update(_MULTI_SELECT_DEFAULTS)
+            new_state_kwargs['search_hit_ids'] = tuple(action.hit_ids)
+            new_state_kwargs['search_index'] = action.index
+            new_state_kwargs['search_query'] = action.query
+        elif isinstance(action, ClearPointSearchAction):
+            new_state_kwargs.update(_SEARCH_DEFAULTS)
+
         # 状態リセット（クリーンアップ）
         elif isinstance(action, ResetSelectionAction):
+            new_state_kwargs.update(_SEARCH_DEFAULTS)
+            new_state_kwargs.update(_MULTI_SELECT_DEFAULTS)
             new_state_kwargs['selected_point_id'] = None
+            new_state_kwargs['selected_point_data'] = None
+            new_state_kwargs['point_info_summary'] = {"group": "-", "pointname": "-", "coords": "-"}
             new_state_kwargs['is_out_of_bounds'] = False
             new_state_kwargs['point_info_has_error'] = False
             new_state_kwargs['has_digitized_with_branch'] = False

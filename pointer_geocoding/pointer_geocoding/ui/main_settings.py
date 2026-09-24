@@ -163,6 +163,7 @@ TAB3_SETTINGS_SPEC = PanelSpec(
 )
 
 
+# Tab 3 (環境設定) のUIを構築し、シグナルとアクションのバインディングを行う。
 def create_tab3_ui(dock_widget: Any) -> QWidget:
     """
     Tab 3 (環境設定) のUIを構築し、シグナルとアクションのバインディングを行う。

@@ -9,10 +9,12 @@ FieldSpec, reusing UIStyleHelper's existing row/button/table helpers
 (ui/style.py) as the actual widget factories. This module is a thin layer
 over ui/style.py, not a replacement for it.
 """
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from qgis.gui import QgsFilterLineEdit
 from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -39,6 +41,8 @@ _STYLE_APPLIERS = {
     "primary": UIStyleHelper.set_primary_button,
     "accent": UIStyleHelper.set_accent_button,
     "success": UIStyleHelper.set_success_button,
+    "plain": UIStyleHelper.set_plain_button,
+    "filter": UIStyleHelper.set_filter_button,
 }
 
 _RESIZE_MODES = {
@@ -65,6 +69,7 @@ class BuiltPanel:
         WidgetType.LIST_WIDGET,   
     )
 
+    # BuiltPanelの初期化。コンテナウィジェットとフィールド/行/ボタン/フック等の対応表を保持する。
     def __init__(
         self,
         widget: QWidget,
@@ -81,19 +86,24 @@ class BuiltPanel:
         self._pending_hooks = pending_hooks
         self._field_types = field_types or {}
 
+    # フィールドIDに対応するウィジェットを取得する。
     def get(self, field_id: str) -> QWidget:
         return self._field_widgets[field_id]
 
+    # フィールドIDに対応する行ウィジェットを取得する。
     def get_row(self, field_id: str) -> QWidget:
         return self._row_widgets[field_id]
 
+    # フィールドIDに対応するボタン一覧を取得する。
     def get_buttons(self, field_id: str) -> List[QPushButton]:
         return self._buttons_lists[field_id]
 
+    # 指定したフック名に登録済みの全コネクタへコールバックを接続する。
     def bind(self, hook_name: str, callback: Callable) -> None:
         for connector in self._pending_hooks.get(hook_name, []):
             connector(callback)
-    
+
+    # イベントフック名に対応するUIActionを発行し、ディスパッチャへ送信するバインディングを構築する。
     def auto_bind(self, dispatcher: Any, action_mapping: Dict[str, Callable[..., Any]]) -> None:
         """
         PanelSpecのイベントフック名に対応するUIActionを自動発行し、
@@ -117,6 +127,7 @@ class BuiltPanel:
             
             self.bind(hook_name, create_bound_callback())
 
+    # フィールドのウィジェット種別に応じて現在の入力値を取得する。
     def get_value(self, field_id: str) -> Any:
         widget_type = self._field_types[field_id]
         if widget_type == WidgetType.LINEEDIT_ROW:
@@ -147,6 +158,7 @@ class BuiltPanel:
             f"get_value() is not supported for field '{field_id}' (widget_type={widget_type})"
         )
 
+    # フィールドのウィジェット種別に応じて値を設定・反映する。
     def set_value(self, field_id: str, value: Any) -> None:
         widget_type = self._field_types[field_id]
         if widget_type == WidgetType.LINEEDIT_ROW:
@@ -192,10 +204,12 @@ class BuiltPanel:
         )
 
     @staticmethod
+    # カラーボタンに色コードを保持させ、背景色スタイルを適用する。
     def _set_color_button(btn: QPushButton, color_hex: str) -> None:
         btn._color_hex = color_hex
         btn.setStyleSheet(f"background-color: {color_hex}; color: white; border-radius: 4px;")
 
+    # 値を保持する全フィールドの現在値をまとめて辞書として取得する。
     def collect_values(self) -> Dict[str, Any]:
         return {
             field_id: self.get_value(field_id)
@@ -203,6 +217,7 @@ class BuiltPanel:
             if widget_type in self._VALUE_WIDGET_TYPES
         }
 
+    # 渡された値の辞書を、対象フィールドへ一括で反映する。
     def set_values(self, values: Dict[str, Any]) -> None:
         for field_id, value in values.items():
             widget_type = self._field_types.get(field_id)
@@ -212,6 +227,7 @@ class BuiltPanel:
 
 class CoreUIBuilder:
     @classmethod
+    # PanelSpecの各FieldSpecからウィジェット行を組み立て、BuiltPanelとして返す。
     def build(cls, spec: PanelSpec, parent: Optional[QWidget] = None) -> BuiltPanel:
         container = QWidget(parent)
         layout = QVBoxLayout(container)
@@ -250,20 +266,27 @@ class CoreUIBuilder:
         return panel
 
     @staticmethod
+    # スタイルバリアント名に対応するボタンスタイルを適用する。
     def _apply_button_style(button: QPushButton, style_variant: Optional[str]) -> None:
         applier = _STYLE_APPLIERS.get(style_variant)
         if applier:
             applier(button)
 
     @classmethod
+    # ButtonDefからQPushButtonを生成し、スタイル適用とクリックフックの登録を行う。
     def _make_button(cls, b: ButtonDef, parent: QWidget, register_hook) -> QPushButton:
         btn = QPushButton(b.text, parent)
+        if b.icon:
+            # プラグイン直下の icon/ を絶対パスで解決(ui/core/ から3階層上がプラグインルート)
+            plugin_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            btn.setIcon(QIcon(os.path.join(plugin_root, "icon", b.icon)))
         cls._apply_button_style(btn, b.style_variant)
         btn.setEnabled(b.enabled)
         register_hook(b.on_click, lambda cb, btn=btn: btn.clicked.connect(cb))
         return btn
 
     @classmethod
+    # ラベルと複数ウィジェットを横並びに配置する行を構築する(要素数無制限のflex row)。
     def _build_flex_row_unlimited(
         cls, 
         label_text: Optional[str], 
@@ -302,6 +325,7 @@ class CoreUIBuilder:
         return row_widget
 
     @classmethod
+    # テキスト入力欄(と任意の付随ボタン)を持つ行を構築する。
     def _build_lineedit_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         label = QLabel(f.label, parent) if f.label else None
         edit = QgsFilterLineEdit(parent)
@@ -312,7 +336,8 @@ class CoreUIBuilder:
             field_widgets[f"{f.field_id}.label"] = label
         register_hook(f.on_change, lambda cb, edit=edit: edit.textChanged.connect(cb))
 
-        content = [(edit, 6 if f.trailing_button else 1)]
+        edit_stretch = (f.lineedit_stretch or 6) if f.trailing_button else 1
+        content = [(edit, edit_stretch)]
         if f.trailing_button:
             btn = cls._make_button(f.trailing_button, parent, register_hook)
             field_widgets[f.trailing_button.field_id] = btn
@@ -326,6 +351,7 @@ class CoreUIBuilder:
         )
 
     @classmethod
+    # コンボボックスを持つ行を構築する。
     def _build_combobox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         label = QLabel(f.label, parent) if f.label else None
         combo = QComboBox(parent)
@@ -339,6 +365,7 @@ class CoreUIBuilder:
         )
 
     @classmethod
+    # 単一ボタンウィジェットを構築する。
     def _build_button(cls, f, parent, field_widgets, buttons_lists, register_hook):
         b = ButtonDef(
             field_id=f.field_id,
@@ -352,6 +379,7 @@ class CoreUIBuilder:
         return btn
 
     @classmethod
+    # 複数ボタンを横並びに配置した行を構築する。
     def _build_button_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         row = QWidget(parent)
         row_layout = QHBoxLayout(row)
@@ -367,6 +395,7 @@ class CoreUIBuilder:
         return row
 
     @classmethod
+    # ヘッダー付きテーブルウィジェットを構築する。
     def _build_table(cls, f, parent, field_widgets, buttons_lists, register_hook):
         table = QTableWidget(0, len(f.table_headers), parent)
         table.setHorizontalHeaderLabels(f.table_headers)
@@ -381,6 +410,7 @@ class CoreUIBuilder:
         return table
 
     @classmethod
+    # ラジオボタン群を持つ排他選択行を構築する。
     def _build_radio_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         group = QButtonGroup(parent)
         buttons: List[QRadioButton] = []
@@ -414,6 +444,7 @@ class CoreUIBuilder:
         return row
 
     @classmethod
+    # セグメント切替トグルを持つ行を構築する。
     def _build_segmented_toggle(cls, f, parent, field_widgets, buttons_lists, register_hook):
         container, buttons = UIStyleHelper.build_segmented_toggle(
             f.options, default_index=f.default_index, parent=parent
@@ -427,6 +458,15 @@ class CoreUIBuilder:
 
         register_hook(f.on_change, connect_index_hook)
 
+        if f.label:
+            return cls._build_flex_row_unlimited(
+                f.label,
+                [(container, 1)],
+                main_ratio=f.main_ratio or UIConfig.MAIN_RATIO,
+                row_height=f.row_height or UIConfig.ROW_HEIGHT,
+                parent=parent
+            )
+
         return UIStyleHelper.build_flex_row(
             None,
             [(container, 1)],
@@ -435,6 +475,7 @@ class CoreUIBuilder:
         )
 
     @classmethod
+    # 整数スピンボックスを持つ行を構築する。
     def _build_spinbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         spin = UIStyleHelper.create_spinbox(f.spin_min, f.spin_max, f.spin_default, parent)
         spin.setEnabled(f.enabled)
@@ -451,12 +492,14 @@ class CoreUIBuilder:
         )
 
     @classmethod
+    # セクション見出しラベルを構築する。
     def _build_section_header(cls, f, parent, field_widgets, buttons_lists, register_hook):
         header = UIStyleHelper.build_section_header(f.label or "")
         field_widgets[f.field_id] = header
         return header
 
     @classmethod
+    # 小数値スピンボックスを持つ行を構築する。
     def _build_double_spinbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         spin = QDoubleSpinBox(parent)
         spin.setRange(f.dspin_min, f.dspin_max)
@@ -468,6 +511,7 @@ class CoreUIBuilder:
         return UIStyleHelper.build_form_row(f.label or "", spin, label_width=f.label_width)
 
     @classmethod
+    # 色選択ボタンを持つ行を構築する。
     def _build_color_button_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         btn = QPushButton("", parent)
         BuiltPanel._set_color_button(btn, f.color_default)
@@ -476,6 +520,7 @@ class CoreUIBuilder:
         return UIStyleHelper.build_form_row(f.label or "", btn, label_width=f.label_width)
 
     @classmethod
+    # 複数のサブフィールドを横並びに束ねたグループ行を構築する。
     def _build_row_group(cls, f, parent, field_widgets, buttons_lists, register_hook):
         row = QWidget(parent)
         row_layout = QHBoxLayout(row)
@@ -487,12 +532,14 @@ class CoreUIBuilder:
         return row
 
     @classmethod
+    # 空の余白用スペーサーウィジェットを構築する。
     def _build_spacer(cls, f, parent, field_widgets, buttons_lists, register_hook):
         spacer = QWidget(parent)
         field_widgets[f.field_id] = spacer
         return spacer
 
     @classmethod
+    # 複数行の情報テキスト(区切り線・太字・折り返し等)を並べた情報パネルを構築する。
     def _build_info_panel(cls, f, parent, field_widgets, buttons_lists, register_hook):
         frame = QFrame(parent)
         UIStyleHelper.set_status_panel(frame)
@@ -523,6 +570,7 @@ class CoreUIBuilder:
         return frame
 
     @classmethod
+    # チェックボックス群を持つ複数選択可能な行を構築する。
     def _build_checkbox_row(cls, f, parent, field_widgets, buttons_lists, register_hook):
         buttons: List[QCheckBox] = []
         content = []
@@ -557,6 +605,7 @@ class CoreUIBuilder:
         return row
 
     @classmethod
+    # チェック可能または単一選択可能なリストウィジェットを構築する。
     def _build_list_widget(cls, f, parent, field_widgets, buttons_lists, register_hook):
         list_widget = QListWidget(parent)
         if f.list_min_height:

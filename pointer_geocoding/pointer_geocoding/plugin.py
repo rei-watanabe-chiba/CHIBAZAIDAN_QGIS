@@ -21,6 +21,7 @@ from .ui.constants import UIMessages
 class PointerGeocodingPlugin:
     """Main plugin entry class managing lifecycle, UI integration, and session orchestration."""
 
+    # プラグインインスタンスの初期化。iface保持、アクション/ツールバー/LayerManager/ドックウィジェットの初期状態を設定。
     def __init__(self, iface: QgisInterface) -> None:
         """Initialize the plugin instance."""
         self.iface = iface
@@ -31,6 +32,7 @@ class PointerGeocodingPlugin:
         self.layer_manager = LayerManager(iface)
         self.dock_widget: Optional[Any] = None
 
+    # SVG/PNGファイルからプラグインアイコンを取得し、無ければ動的にフォールバックアイコンを生成する。
     def _get_icon(self) -> QIcon:
         """Obtain the plugin icon from SVG/PNG file or generate a fallback icon dynamically."""
         # 1. Prioritize icon.svg for crisp High DPI scaling
@@ -56,6 +58,7 @@ class PointerGeocodingPlugin:
         painter.end()
         return QIcon(pixmap)
 
+    # プラグインメニューと専用ツールバーにアクションを登録し、GUIを初期化する。
     def initGui(self) -> None:
         """Initialize and register plugin actions directly under pluginMenu and in dedicated toolbar."""
         icon = self._get_icon()
@@ -73,6 +76,7 @@ class PointerGeocodingPlugin:
         self.toolbar.setObjectName("PointerGeocodingToolbar")
         self.toolbar.addAction(self.action)
 
+    # メニュー・ツールバーからアクションを除去し、ドックウィジェットも含めてGUI要素を全て解除する。
     def unload(self) -> None:
         """Remove GUI elements, unregister menus and toolbars, and close active docks."""
         if self.action is not None:
@@ -91,15 +95,27 @@ class PointerGeocodingPlugin:
 
         self._teardown_dock_widget()
 
+        try:
+            self.layer_manager.release_resources()
+        except Exception:
+            pass
+
+    # メインドックウィジェットをQGISインターフェースから解除し、破棄する。
     def _teardown_dock_widget(self) -> None:
         """Unregister and dispose of the main dock widget."""
         if self.dock_widget is None:
             return
 
+        try:
+            self.dock_widget.dispose()
+        except Exception:
+            pass
+
         self.iface.removeDockWidget(self.dock_widget)
         self.dock_widget.deleteLater()
         self.dock_widget = None
 
+    # 未保存確認・開始ダイアログ表示・セッション初期化を行い、プラグインの起動シーケンスを実行する。
     def run(self) -> None:
         """Execute the plugin launch sequence: check dirty state, show start dialog, and initialize session."""
         # 1. Protect unsaved changes in current QGIS project
@@ -163,6 +179,7 @@ class PointerGeocodingPlugin:
             )
             return
 
+    # メインドックウィジェットを生成し、QGISインターフェースに追加して表示する。
     def _setup_dock_widget(self, layers_dict: Optional[Dict[str, Any]]) -> None:
         """Instantiate and attach the main dock widget to the QGIS interface."""
         try:

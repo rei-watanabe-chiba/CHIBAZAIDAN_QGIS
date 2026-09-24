@@ -45,6 +45,7 @@ class SymbologyMixin:
     """Mixin providing point/reference-point symbology and labeling for LayerManager."""
 
     @staticmethod
+    # 測点レイヤに動的な式ベースのラベリング(点名・支番等)を適用する。
     def apply_point_labeling(layer: QgsVectorLayer) -> None:
         """Apply dynamic expression-based labeling to the points layer."""
         settings = QgsPalLayerSettings()
@@ -72,6 +73,7 @@ class SymbologyMixin:
         layer.setLabeling(labeling)
 
     @staticmethod
+    # S/P/C/SPの属性区分ごとにカテゴリ分類シンボル(丸・ダイヤ・三角・二重丸)とラベルを適用する。
     def apply_point_symbology(
         layer: QgsVectorLayer,
         settings: Optional[Dict[str, Any]] = None,
@@ -234,6 +236,7 @@ class SymbologyMixin:
         layer.triggerRepaint()
 
     @staticmethod
+    # ラベルの基準点が挿入点の左下に来るよう、ラベルクアドラントを右上寄りに設定する。
     def apply_above_right_label_quadrant(pal: QgsPalLayerSettings) -> None:
         """Align label anchor so its bottom-left sits exactly at the insertion point.
 
@@ -260,6 +263,7 @@ class SymbologyMixin:
             pass
 
     @staticmethod
+    # 基準点レイヤに十字シンボルとルールベースレンダリング(縮尺連動の表示切替)、ラベルを適用する。
     def apply_ref_point_symbology(
         layer: QgsVectorLayer,
         settings: Optional[Dict[str, Any]] = None,
@@ -346,6 +350,7 @@ class SymbologyMixin:
         layer.triggerRepaint()
 
     @staticmethod
+    # フィルタ条件(属性・出土形態・遺構名・対象図面)に基づき、カテゴリ別不透明度を切り替えるCASE式を構築する。
     def build_opacity_expression(
         is_focus_on: bool,
         filters: Optional[Dict[str, Any]],
@@ -438,6 +443,7 @@ class SymbologyMixin:
         return f"CASE WHEN {condition_str} THEN 100 ELSE {slider_val} END"
 
     @staticmethod
+    # 不透明度式をレイヤの各カテゴリシンボルとラベルにデータ定義プロパティとして適用し、再描画する。
     def apply_opacity_expression(layer: QgsVectorLayer, expr: str) -> None:
         """Apply a QgsProperty opacity expression to every category symbol and label of a layer.
 

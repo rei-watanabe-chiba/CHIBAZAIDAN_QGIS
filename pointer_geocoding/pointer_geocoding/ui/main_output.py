@@ -9,13 +9,13 @@ UIの更新は、UIStateStoreの state_changed シグナルを受け取り、blo
 """
 import os
 from typing import Any, Dict
-from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QFrame, QFileDialog
+from qgis.PyQt.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QFrame, QFileDialog, QMessageBox
 from qgis.core import Qgis
 
-from .constants import UIConfig, UILabels, UIPlaceholders, UIDialogTitles
+from .constants import UIConfig, UILabels, UIPlaceholders, UIDialogTitles, UIMessages
 from .core.builder import CoreUIBuilder
 from .core.field_spec import FieldSpec, PanelSpec, WidgetType, ButtonDef
-from .core.state import UpdateOutputSettingsAction
+from .core.state import UpdateOutputSettingsAction, SetValidationAction
 from ..uilogic.output_logic import OutputLogic, ExportCsvAction
 
 # =========================================================================
@@ -65,6 +65,7 @@ TAB4_OUTPUT_SPEC = PanelSpec(
     ]
 )
 
+# Tab 4 (出力) のUIを構築し、シグナルとアクションのバインディングを行う。
 def create_tab4_ui(dock_widget: Any) -> QWidget:
     """
     Tab 4 (出力) のUIを構築し、シグナルとアクションのバインディングを行う。
@@ -103,8 +104,17 @@ def create_tab4_ui(dock_widget: Any) -> QWidget:
     panel.auto_bind(dock_widget.dispatcher, {
         "encoding_changed": lambda idx: UpdateOutputSettingsAction(encoding=idx),
         "csv_path_changed": lambda: UpdateOutputSettingsAction(csv_path=panel.get_value("csv_path").strip()),
-        "export_csv_clicked": lambda: ExportCsvAction()
     })
+
+    # CSV出力を実行し、ハンドラ失敗時のみメッセージをダイアログで通知してエラー状態を解除する(前置バリデーション失敗は対象外)。
+    def _on_export_csv() -> None:
+        dock_widget.dispatcher.dispatch(ExportCsvAction())
+        state = dock_widget.state_store.state
+        if state.has_input_error and not state.error_focus_field and state.status_message:
+            QMessageBox.warning(dock_widget, UIMessages.ERR_TITLE_GENERIC, state.status_message)
+            dock_widget.state_store.dispatch(SetValidationAction(False, ""))
+
+    panel.bind("export_csv_clicked", _on_export_csv)
 
     # ファイルダイアログ等のView固有のUI操作は、View内で完結させてから Action を発行する
     def _on_browse_csv() -> None:

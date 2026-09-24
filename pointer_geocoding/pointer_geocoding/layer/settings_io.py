@@ -17,6 +17,7 @@ from .models import PluginSettings, ImageLayerMeta, safe_json_load, safe_json_sa
 class SettingsMetadataMixin:
     """Mixin providing plugin settings and image metadata persistence for LayerManager."""
 
+    # settings.jsonの絶対パスを返す。
     def get_settings_path(self) -> Optional[str]:
         """Return the absolute path to settings.json."""
         if not self.session_json_dir:
@@ -26,6 +27,7 @@ class SettingsMetadataMixin:
     # Default settings values
     DEFAULT_SETTINGS: Dict[str, Any] = PluginSettings().to_dict()
 
+    # json/settings.jsonから設定を読み込み、欠落キーはデフォルト値で補う。
     def load_settings(self) -> Dict[str, Any]:
         """Load settings from json/settings.json.
 
@@ -43,6 +45,7 @@ class SettingsMetadataMixin:
                 pass
         return result
 
+    # json/settings.jsonをPluginSettingsインスタンスとして読み込む。
     def load_settings_dataclass(self) -> PluginSettings:
         """Load settings from json/settings.json as a PluginSettings instance.
 
@@ -51,6 +54,7 @@ class SettingsMetadataMixin:
         """
         return PluginSettings.from_dict(self.load_settings())
 
+    # 設定をjson/settings.jsonへ永続化し、settings_changedシグナルを発行する。
     def save_settings(self, settings: Union[PluginSettings, Dict[str, Any]]) -> bool:
         """Persist settings to json/settings.json.
 
@@ -70,6 +74,7 @@ class SettingsMetadataMixin:
         except Exception:
             return False
 
+    # セッションのjson/ディレクトリが無ければ作成し、settings.jsonが無ければデフォルト値で作成する。
     def ensure_json_dir(self) -> None:
         """Create the session json/ directory if it does not exist."""
         if self.session_json_dir:
@@ -78,16 +83,19 @@ class SettingsMetadataMixin:
             if (path := self.get_settings_path()) and not os.path.exists(path):
                 self.save_settings(PluginSettings())
 
+    # image_metadata.jsonの絶対パスを返す。
     def get_image_metadata_path(self) -> Optional[str]:
         """Get the path to image_metadata.json."""
         if not self.session_image_dir:
             return None
         return os.path.join(self.session_image_dir, "image_metadata.json")
 
+    # JSONファイルから画像メタデータを読み込む。
     def load_image_metadata(self) -> Dict[str, Any]:
         """Load image metadata from JSON file."""
         return safe_json_load(self.get_image_metadata_path(), default={})
 
+    # 画像メタデータをJSONファイルへ保存し、metadata_updatedシグナルを発行する。
     def save_image_metadata(self, metadata: Dict[str, Any]) -> bool:
         """Save image metadata to JSON file.
 
@@ -110,6 +118,7 @@ class SettingsMetadataMixin:
         except Exception:
             return False
 
+    # 指定した画像レイヤーのメタデータをImageLayerMetaで更新または追加する。
     def update_image_metadata(
         self,
         layer_name: str,
@@ -127,6 +136,7 @@ class SettingsMetadataMixin:
         meta[layer_name] = entry.to_dict()
         return self.save_image_metadata(meta)
 
+    # 指定した画像レイヤーのメタデータを削除する。
     def delete_image_metadata(self, layer_name: str) -> bool:
         """Remove metadata for a specific image layer."""
         meta = self.load_image_metadata()

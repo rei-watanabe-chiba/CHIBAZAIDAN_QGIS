@@ -35,6 +35,7 @@ class GpkgCacheMixin:
     cache Observer synchronization for LayerManager."""
 
     @staticmethod
+    # writeAsVectorFormatV3を使い、ベクタレイヤをGeoPackageへ書き出しまたは追記する。
     def create_gpkg_layer(layer: QgsVectorLayer, gpkg_path: str, layer_name: str) -> Tuple[bool, str]:
         """Export or append a vector layer into a GeoPackage using writeAsVectorFormatV3."""
         options = QgsVectorFileWriter.SaveVectorOptions()
@@ -57,6 +58,7 @@ class GpkgCacheMixin:
         return error == QgsVectorFileWriter.NoError, error_msg
 
     @classmethod
+    # GeoPackage内に初期の'points'スキーマ(フィールド定義済み)を作成する。
     def create_initial_gpkg(cls, gpkg_path: str) -> Tuple[bool, str]:
         """Create initial 'points' schema inside the GeoPackage.
 
@@ -96,6 +98,7 @@ class GpkgCacheMixin:
         return True, ""
 
     @staticmethod
+    # pointsレイヤに必須カラム(drawing_name等)が存在するか確認し、不足分を自動追加する。
     def check_and_migrate_point_layer(layer: QgsVectorLayer) -> bool:
         """Verify existence of required columns (drawing_name, pixel_x, pixel_y) and add them automatically if missing.
 
@@ -127,6 +130,7 @@ class GpkgCacheMixin:
         return True
 
     @staticmethod
+    # フィーチャのフィールド値をNULL処理込みでトリム済み文字列として取得する。
     def _extract_field_str(feat: QgsFeature, field_name: str) -> str:
         """Extract trimmed string representation from feature field, handling NULL and QVariant."""
         if field_name not in feat.fields().names():
@@ -138,6 +142,7 @@ class GpkgCacheMixin:
         return "" if s.lower() == "null" else s
 
     @staticmethod
+    # 任意の属性値をNULL処理込みで文字列に正規化する。
     def _safe_str(val: Any) -> str:
         """Normalize arbitrary attribute value to string, handling NULL."""
         if val is None or val == NULL:
@@ -145,6 +150,7 @@ class GpkgCacheMixin:
         s = str(val).strip()
         return "" if s.lower() == "null" else s
 
+    # QgsSpatialIndexとメモリ内キャッシュを構築し、Observer用のシグナルフックを登録する。
     def init_spatial_index_and_cache(self) -> None:
         """Construct QgsSpatialIndex and in-memory caches, and register Observer signal hooks."""
         if not self.point_layer or not self.point_layer.isValid():
@@ -183,6 +189,7 @@ class GpkgCacheMixin:
         self.point_layer.geometryChanged.connect(self._on_geometry_changed)
         self._signals_connected = True
 
+    # pointsレイヤに接続されたObserverシグナルを安全に切断する。
     def _disconnect_point_layer_signals(self) -> None:
         """Safely detach Observer signal connections from the point layer."""
         if self._signals_connected and self.point_layer and self.point_layer.isValid():
@@ -204,6 +211,7 @@ class GpkgCacheMixin:
                 pass
             self._signals_connected = False
 
+    # フィーチャ追加時に空間インデックスと属性/ジオメトリキャッシュを同期する。
     def _on_feature_added(self, fid: int) -> None:
         """Synchronize spatial index and caches when a new feature is added."""
         if not self.point_layer or not self.point_layer.isValid():
@@ -224,6 +232,7 @@ class GpkgCacheMixin:
         if feat.hasGeometry() and not feat.geometry().isEmpty():
             self.geom_cache[fid] = QgsGeometry(feat.geometry())
 
+    # フィーチャ削除時に空間インデックスと属性/ジオメトリキャッシュを同期する。
     def _on_features_deleted(self, fids: Any) -> None:
         """Synchronize spatial index and caches when features are deleted."""
         fid_list = list(fids) if hasattr(fids, "__iter__") else [fids]
@@ -236,6 +245,7 @@ class GpkgCacheMixin:
             self.attr_cache.pop(fid, None)
             self.geom_cache.pop(fid, None)
 
+    # 監視対象フィールドの値変更時に属性キャッシュを同期する。
     def _on_attribute_changed(self, fid: int, idx: int, value: Any) -> None:
         """Synchronize attribute cache when monitored fields change."""
         if not self.point_layer or not self.point_layer.isValid():
@@ -259,6 +269,7 @@ class GpkgCacheMixin:
                     if feat.hasGeometry() and not feat.geometry().isEmpty():
                         self.geom_cache[fid] = QgsGeometry(feat.geometry())
 
+    # フィーチャのジオメトリ変更時に空間インデックスとジオメトリキャッシュを同期する。
     def _on_geometry_changed(self, fid: int, geom: QgsGeometry) -> None:
         """Synchronize spatial index and geometry cache when feature geometry is modified."""
         if self.spatial_index is not None:

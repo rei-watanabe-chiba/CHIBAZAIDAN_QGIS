@@ -25,9 +25,10 @@ class OutputLogic(QObject):
     """
     CSV出力制御を担うControllerクラス。
     """
+    # OutputLogicコントローラの初期化、StateStore/レイヤ管理/Dispatcherの保持とコールバック初期化。
     def __init__(
-        self, 
-        state_store: UIStateStore, 
+        self,
+        state_store: UIStateStore,
         layer_manager: Any, 
         dispatcher: Any,
         parent: Optional[QObject] = None
@@ -47,10 +48,12 @@ class OutputLogic(QObject):
 
         self.show_message_bar_cb: Callable[[str, str, int, int], None] = lambda t, m, l, d: None
 
+    # View層からメッセージバー操作などのコールバックを受け取り保持する。
     def bind_view_callbacks(self, callbacks: Dict[str, Any]) -> None:
         """View層からメッセージバー操作などのコールバックを受け取る"""
         self.show_message_bar_cb = callbacks.get("show_message_bar", self.show_message_bar_cb)
 
+    # EventDispatcherへExportCsvActionのハンドラと前置バリデーションを登録する。
     def register_handlers(self) -> None:
         """
         EventDispatcher に対し、自身が担当する Action のハンドラと前置バリデーションを登録する
@@ -71,6 +74,7 @@ class OutputLogic(QObject):
     # イベントハンドラ (Action Execution)
     # =========================================================================
 
+    # ExportCsvActionを処理し、CSV出力実行後に結果Actionのリストを返すハンドラ。
     def _handle_export_csv(self, action: ExportCsvAction) -> Optional[List[UIAction]]:
         """
         ExportCsvAction の処理を行うハンドラ。
@@ -88,9 +92,7 @@ class OutputLogic(QObject):
         
         # [RULE-GEO-01] ビジネスロジック関数の呼び出し。
         # 境界内(export_points_to_csv内部)で to_survey_coords による変換が実行される。
-        success, msg = export_points_to_csv(
-            point_layer, filepath, encoding=encoding_str, parent=self.parent_widget
-        )
+        success, msg = export_points_to_csv(point_layer, filepath, encoding=encoding_str)
 
         if success:
             self.show_message_bar_cb("CSV出力完了", msg, Qgis.MessageLevel.Success, 5)

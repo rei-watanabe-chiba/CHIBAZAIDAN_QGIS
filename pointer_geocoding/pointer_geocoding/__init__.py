@@ -14,6 +14,7 @@ if hasattr(Qt, "AA_UseHighDpiPixmaps"):
         QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
 
+# QGISからのプラグイン読み込みをトリガーに、plugin.pyからPointerGeocodingPluginを生成して返す。
 def classFactory(iface: Any) -> Any:
     """Load PointerGeocoding plugin class from plugin.py.
 

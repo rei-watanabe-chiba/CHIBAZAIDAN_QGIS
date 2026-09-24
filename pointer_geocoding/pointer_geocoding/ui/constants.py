@@ -134,7 +134,7 @@ class UILabels:
     BTN_DELETE_REF = "選択行を削除"
     BTN_CLEAR_REFS = "全基準点をクリア"
     GROUP_TRANSFORM = "2. 座標変換・実空間配置"
-    TRANSFORM_INIT_STATUS = "状態: 未実行 (最低2点以上の基準点が必要です)"
+    TRANSFORM_INIT_STATUS = "状態: 未実行 (最低2点以上の基準点と実座標が必要です。揃ったら座標変換を実行してください)"
     BTN_TRANSFORM = "座標変換"
     BTN_EXPORT_LAYER = "レイヤ出力"
     GRID_DIALOG_TITLE = "基準点グリッド設定"
@@ -169,6 +169,8 @@ class UILabels:
     DRAWING_NAME = "対象図面:"
     DRAWING_UNSPECIFIED = "-- 未指定 --"
     BTN_DELETE_POINT = "削除"
+    # 点情報パネル(編集モード)の既設点 編集/削除ボタン
+    BTN_EDIT_SELECTED_POINT = "編集"
     EXCAVATION_TYPE = "出土形態:"
     EXCAVATION_OPTIONS = [ExcavationType.GRID.value, ExcavationType.FEATURE.value]
     FEATURE_SELECTOR = "遺構名:"
@@ -217,9 +219,17 @@ class UILabels:
     # 点情報パネル ステータス帯 文言
     STATUS_NEW_POINT = "新規点作成"
     STATUS_EDIT_POINT = "既設点編集"
+    STATUS_MULTI_SELECTED = "{count}件選択中"
+    # 点編集ダイアログ(一括変更モード)用
+    BULK_KEEP = "(変更しない)"
+    BULK_EDIT_TITLE = "点情報一括変更"
+    BULK_EDIT_STATUS = "{count}件を更新"
     STATUS_ERR_FEATURE_REQUIRED = "遺構名未指定"
     STATUS_ERR_OUT_OF_BOUNDS = "図面範囲外"
     STATUS_ERR_DUPLICATE = "点名重複エラー"
+    # 点名検索(点情報パネルの検索行・INFO表示)
+    STATUS_SEARCH_HIT = "検索中 {index}/{total}件"
+    STATUS_SEARCH_NOT_FOUND = "該当なし"
     # tab2先頭の新規/編集モード切替トグル。点情報パネルのモード連動ボタン
     # エリア(新規モード=自動連番/解除トグル、編集モード=削除)。
     TAB2_MODE_NEW = "新規"
@@ -234,9 +244,6 @@ class UILabels:
     UNLOADED = "未読み込み"
     TRANSFORM_HELMERT = "2点ヘルマート変換"
     TRANSFORM_AFFINE = "{count}点アフィン変換"
-    STATUS_NEED_MORE_REFS = "基準点登録数: {count} 点 (※最低2点以上の基準点が必要です)"
-    STATUS_INPUT_COORDS = "基準点登録数: {count} 点 (実座標 X, Y をテーブル内に入力してください)"
-    STATUS_READY_TRANSFORM = "基準点登録数: {count} 点 ({mode}の実行準備が完了しました)"
 
 class UIPlaceholders:
     IMAGE_PATH = "画像ファイルを選択してください"
@@ -245,6 +252,7 @@ class UIPlaceholders:
     BRANCH_NO = "例: a, 1 (未入力可)"
     POINT_NAME_SP = "半角英数字・ハイフン・アンダースコアのみ (例: SP-01)"
     CSV_PATH = "CSV出力先ファイルを指定してください"
+    POINT_SEARCH = "点名(完全一致)"
 
 class UIDialogTitles:
     BROWSE_IMAGE = "図面画像ファイルを選択"
@@ -261,6 +269,7 @@ class UIMessages:
     ERR_TITLE_LOAD = "読み込みエラー"
     ERR_TITLE_DUPLICATE = "重複エラー"
     ERR_TITLE_GENERIC = "エラー"
+    ERR_TITLE_CALC = "計算エラー"
     MSG_TITLE_INFO = "通知"
     MSG_TITLE_LIMIT = "上限通知"
     MSG_CONFIRM_TITLE = "削除確認"
@@ -299,8 +308,20 @@ class UIMessages:
     # UILabels.STATUS_ERR_DUPLICATE("点名重複エラー")と揃えるためのプレフィックス付き
     # フォーマット。core_logic.build_point_ident()が返す識別子文字列と組み合わせて使う。
     ERR_POINT_NAME_DUPLICATE = UILabels.STATUS_ERR_DUPLICATE + ": {ident}"
+    MSG_CONFIRM_DELETE_POINT = "選択中の点を削除してよろしいですか？"
     MSG_DELETE_SUCCESS_TITLE = "ポイント削除"
     MSG_DELETE_SUCCESS = "ポイントを削除しました。"
+    MSG_CONFIRM_DELETE_POINTS = "選択中の{count}件の点を削除してよろしいですか？"
+    MSG_DELETE_SUCCESS_COUNT = "{count}件のポイントを削除しました。"
+    MSG_BULK_UPDATE_TITLE = "一括変更"
+    MSG_BULK_UPDATE_RESULT = "{updated}件を更新しました。"
+    MSG_BULK_UPDATE_SKIPPED = "{skipped}件をスキップしました(内訳: {detail})"
+    MSG_BULK_SKIP_SP = "SP属性 {n}件"
+    MSG_BULK_SKIP_DUPLICATE = "重複 {n}件"
+    MSG_BULK_SKIP_OUT_OF_BOUNDS = "図面範囲外 {n}件"
+    MSG_BULK_SKIP_FEATURE_REQUIRED = "遺構名未指定 {n}件"
+    MSG_COMMIT_FAILED_TITLE = "保存エラー"
+    MSG_COMMIT_FAILED = "変更の保存に失敗したため、変更を取り消しました。"
     MSG_UPDATE_OUT_OF_BOUNDS_TITLE = "図面範囲外"
     MSG_UPDATE_OUT_OF_BOUNDS = (
         "変更先の図面のピクセル範囲外に物理座標があるため、対象図面を変更できませんでした。"

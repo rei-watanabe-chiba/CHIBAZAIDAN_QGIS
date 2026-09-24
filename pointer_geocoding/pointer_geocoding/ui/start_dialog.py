@@ -62,7 +62,7 @@ START_DIALOG_SESSION_SPEC = PanelSpec(
     fields=[
         FieldSpec(
             field_id="session_type",
-            widget_type=WidgetType.RADIO_ROW,
+            widget_type=WidgetType.SEGMENTED_TOGGLE,
             label="セッション種別:",
             options=["新規セッション", "既存セッション"],
             default_index=0,
@@ -105,7 +105,7 @@ START_DIALOG_GRID_CSV_SPEC = PanelSpec(
         ),
         FieldSpec(
             field_id="grid_mode",
-            widget_type=WidgetType.RADIO_ROW,
+            widget_type=WidgetType.SEGMENTED_TOGGLE,
             label="グリッドモード:",
             options=["新規作成・更新", "CSVファイル利用"],
             default_index=0,
@@ -119,6 +119,7 @@ class ExcelColumnSpinBox(QSpinBox):
     MIN_VALUE = 1
     MAX_VALUE = 702
 
+    # Excel列記法(A, B, ..., Z, AA, ...)の入力用バリデータと値域の初期化。
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         if HAS_QT_REGEX:
@@ -127,14 +128,17 @@ class ExcelColumnSpinBox(QSpinBox):
             self._validator = QRegExpValidator(QRegExp(r"^[A-Za-z]{1,2}$"), self)
         self.setRange(self.MIN_VALUE, self.MAX_VALUE)
 
+    # 数値を表示用のExcel列表記文字列に変換する。
     def textFromValue(self, value: int) -> str:
         return to_excel_column(value)
 
+    # Excel列表記文字列を数値に変換し、値域内にクランプする。
     def valueFromText(self, text: str) -> int:
         value = from_excel_column(text)
         if value <= 0: return self.MIN_VALUE
         return min(value, self.MAX_VALUE)
 
+    # 入力中のテキストが英字1〜2文字の正規表現に適合するか検証する。
     def validate(self, text: str, pos: int):
         return self._validator.validate(text, pos)
 
@@ -142,6 +146,7 @@ class ExcelColumnSpinBox(QSpinBox):
 class StartDialog(QDialog):
     """Dialog for creating a new digitizing session or loading an existing one."""
 
+    # ダイアログの初期化、UI構築、ロジックコントローラへのUI参照バインドと初期状態の反映。
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("点群座標取得 - セッション選択")
@@ -184,6 +189,7 @@ class StartDialog(QDialog):
         self._on_session_type_changed()
         self._apply_grid_mode_state()
 
+    # セッション管理・グリッド設定・操作ボタンを含むダイアログ全体のレイアウトを構築する。
     def _init_ui(self) -> None:
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(DialogConfig.DIALOG_MARGIN)
@@ -326,9 +332,9 @@ class StartDialog(QDialog):
 
         self.spin_origin_x.valueChanged.connect(self._update_grid_coordinate_preview)
         self.spin_origin_y.valueChanged.connect(self._update_grid_coordinate_preview)
-        self.spin_range_x_min.valueChanged.connect(self._on_grid_inputs_changed)
+        self.spin_range_x_min.valueChanged.connect(self._on_range_x_min_changed)
         self.spin_range_x_max.valueChanged.connect(self._on_grid_inputs_changed)
-        self.spin_range_y_min.valueChanged.connect(self._on_grid_inputs_changed)
+        self.spin_range_y_min.valueChanged.connect(self._on_range_y_min_changed)
         self.spin_range_y_max.valueChanged.connect(self._on_grid_inputs_changed)
         self.spin_preview_x.valueChanged.connect(self._update_grid_coordinate_preview)
         self.edit_preview_y.textChanged.connect(self._update_grid_coordinate_preview)
@@ -348,9 +354,11 @@ class StartDialog(QDialog):
         btn_layout.addStretch(1)
         main_layout.addLayout(btn_layout)
 
+    # セッション種別(新規/既存)の切り替えをロジックコントローラへ委譲する。
     def _on_session_type_changed(self, _index: int = 0) -> None:
         self.logic.handle_session_type_changed()
 
+    # グリッドCSVの有効性・モードに応じて入力欄の有効化状態とメタデータ反映を行う。
     def _apply_grid_mode_state(self) -> None:
         csv_path = self.edit_grid_csv.text().strip()
         metadata = self.logic.extract_csv_metadata(csv_path) if csv_path else None
@@ -398,11 +406,40 @@ class StartDialog(QDialog):
                 self.spin_range_y_max.setValue(metadata["range_y_max"])
             finally:
                 for spin in range_spinboxes: spin.blockSignals(False)
+            self._sync_preview_x_to_range_min()
+            self._sync_preview_y_to_range_min()
 
         self._csv_invalid = bool(csv_path) and not csv_valid
         self._csv_row_count = metadata.get("row_count") if metadata else None
         self._on_grid_inputs_changed()
 
+    # プレビューX入力をX範囲の最小値に合わせる(シグナルはブロックし再評価の連鎖を防ぐ)。
+    def _sync_preview_x_to_range_min(self) -> None:
+        self.spin_preview_x.blockSignals(True)
+        try:
+            self.spin_preview_x.setValue(self.spin_range_x_min.value())
+        finally:
+            self.spin_preview_x.blockSignals(False)
+
+    # プレビューY入力をY範囲の最小値のExcel列表記に合わせる(シグナルはブロックし再評価の連鎖を防ぐ)。
+    def _sync_preview_y_to_range_min(self) -> None:
+        self.edit_preview_y.blockSignals(True)
+        try:
+            self.edit_preview_y.setText(to_excel_column(self.spin_range_y_min.value()))
+        finally:
+            self.edit_preview_y.blockSignals(False)
+
+    # X範囲の最小値変更時にプレビューXを追従させてから状態パネルを再評価する。
+    def _on_range_x_min_changed(self, *_args) -> None:
+        self._sync_preview_x_to_range_min()
+        self._on_grid_inputs_changed()
+
+    # Y範囲の最小値変更時にプレビューYを追従させてから状態パネルを再評価する。
+    def _on_range_y_min_changed(self, *_args) -> None:
+        self._sync_preview_y_to_range_min()
+        self._on_grid_inputs_changed()
+
+    # プレビュー用グリッド座標(基準点X/Y)の測地座標への変換結果をステータスパネルに表示する。
     def _update_grid_coordinate_preview(self) -> None:
         if self._active_grid_warning is not None:
             return
@@ -433,10 +470,12 @@ class StartDialog(QDialog):
                 f"{grid_prefix}: 範囲外", "error"
             )
 
+    # グリッド範囲入力変更時に基準点数超過の確認済みフラグをリセットし、状態パネルを再評価する。
     def _on_grid_inputs_changed(self) -> None:
         self._row_count_ack = False
         self._refresh_grid_status_panel()
 
+    # CSV不正・範囲不正・基準点数超過の順に警告条件を判定し、ステータスパネルとOKボタンを更新する。
     def _refresh_grid_status_panel(self) -> None:
         if self._csv_invalid:
             self._active_grid_warning = "csv_invalid"
@@ -463,10 +502,12 @@ class StartDialog(QDialog):
         self._update_grid_coordinate_preview()
         self._update_ok_button_state()
 
+    # ステータスパネルに警告メッセージを表示し、確認ボタンを表示状態にする。
     def _show_grid_warning(self, text: str) -> None:
         UIStyleHelper.update_status_panel(self.panel_preview_status, self.lbl_preview_status, text, "warning")
         self.btn_grid_warning_confirm.setVisible(True)
 
+    # 現在表示中の警告種別に応じてCSVクリア・確認ボタン非表示・基準点数超過の確認済み化を行う。
     def _on_grid_warning_confirm_clicked(self) -> None:
         if self._active_grid_warning == "csv_invalid":
             self.edit_grid_csv.setText("")
@@ -476,14 +517,17 @@ class StartDialog(QDialog):
             self._row_count_ack = True
             self._refresh_grid_status_panel()
 
+    # CSV不正・範囲不正・未確認の基準点数超過のいずれかがあればOKボタンを無効化する。
     def _update_ok_button_state(self) -> None:
         blocked = (self._csv_invalid or self._range_invalid or (self._active_grid_warning == "row_count" and not self._row_count_ack))
         self.btn_ok.setEnabled(not blocked)
 
+    # ロジックコントローラで入力値を検証し、問題なければダイアログを受理(accept)する。
     def _validate_and_accept(self) -> None:
         if self.logic.validate_inputs():
             self.accept()
 
+    # 新規/既存セッションの種別に応じて、フォームの入力内容をセッション生成用の辞書にまとめて返す。
     def get_session_data(self) -> Dict[str, Any]:
         is_new = self.radio_new.isChecked()
         folder_path = self.edit_folder.text().strip()
